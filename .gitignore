@@ -1,0 +1,12 @@
+.idea
+.idea/*
+*.iml
+out/
+/build
+/cmake-build-*
+cmake-build-*/*
+
+.vscode
+.vscode/*
+*.code-workspace
+
