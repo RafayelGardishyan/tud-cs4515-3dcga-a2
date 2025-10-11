@@ -14,8 +14,26 @@
 class RS_Scene
 {
 public:
+    RS_Scene();
+    ~RS_Scene();
+
+    // Delete copy constructor and copy assignment (scenes shouldn't be copied)
+    RS_Scene(const RS_Scene&) = delete;
+    RS_Scene& operator=(const RS_Scene&) = delete;
+
+    // Move constructor and move assignment
+    RS_Scene(RS_Scene&& other) noexcept;
+    RS_Scene& operator=(RS_Scene&& other) noexcept;
+
     // Draw the entire scene with multi-pass lighting
-    void draw(const Shader& drawShader);
+    void draw(const Shader& drawShader, bool debugLights);
+
+    // These functions are called by the application
+    void onKeyPressed(int key, int mods) {};
+    void onKeyReleased(int key, int mods) {};
+    void onMouseMove(const glm::dvec2& cursorPos) {};
+    void onMouseClicked(int button, int mods) {};
+    void onMouseReleased(int button, int mods) {};
 
     // Camera management
     Trackball& getActiveCamera() { return *m_cameras[m_activeCameraIndex]; }
@@ -43,6 +61,9 @@ private:
 
     // Lights
     std::vector<RS_Light> m_lights;
+    size_t m_selectedLightIndex = 0;
+    Shader m_lightShader;
+    unsigned int m_lightVAO = 0;
 
     // Cameras
     std::vector<std::unique_ptr<Trackball>> m_cameras;

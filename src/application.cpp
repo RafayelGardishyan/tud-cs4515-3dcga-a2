@@ -214,6 +214,8 @@ public:
             ImGui::PopID();
         }
 
+        ImGui::Checkbox("Debug", &m_debug);
+
         ImGui::End();
     }
 
@@ -234,7 +236,7 @@ public:
 
             // Draw the active scene
             if (!m_scenes.empty()) {
-                m_scenes[m_activeSceneIndex].draw(m_defaultShader);
+                m_scenes[m_activeSceneIndex].draw(m_defaultShader, m_debug);
             }
 
             // Processes input and swaps the window buffer
@@ -248,6 +250,7 @@ public:
     void onKeyPressed(int key, int mods)
     {
         std::cout << "Key pressed: " << key << std::endl;
+        m_scenes[m_activeSceneIndex].onKeyPressed(key, mods);
     }
 
     // In here you can handle key releases
@@ -256,12 +259,14 @@ public:
     void onKeyReleased(int key, int mods)
     {
         std::cout << "Key released: " << key << std::endl;
+        m_scenes[m_activeSceneIndex].onKeyReleased(key, mods);
     }
 
     // If the mouse is moved this function will be called with the x, y screen-coordinates of the mouse
     void onMouseMove(const glm::dvec2& cursorPos)
     {
         std::cout << "Mouse at position: " << cursorPos.x << " " << cursorPos.y << std::endl;
+        m_scenes[m_activeSceneIndex].onMouseMove(cursorPos);
     }
 
     // If one of the mouse buttons is pressed this function will be called
@@ -270,6 +275,7 @@ public:
     void onMouseClicked(int button, int mods)
     {
         std::cout << "Pressed mouse button: " << button << std::endl;
+        m_scenes[m_activeSceneIndex].onMouseClicked(button, mods);
     }
 
     // If one of the mouse buttons is released this function will be called
@@ -278,6 +284,7 @@ public:
     void onMouseReleased(int button, int mods)
     {
         std::cout << "Released mouse button: " << button << std::endl;
+        m_scenes[m_activeSceneIndex].onMouseReleased(button, mods);
     }
 
 private:
@@ -286,6 +293,8 @@ private:
     // Shader for default rendering and for depth rendering
     Shader m_defaultShader;
     Shader m_shadowShader;
+
+    bool m_debug = true;
 
     // Scene system
     std::vector<RS_Scene> m_scenes;

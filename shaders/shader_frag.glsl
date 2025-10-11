@@ -1,14 +1,14 @@
 #version 410
 
-layout(std140) uniform Material // Must match RS_GPUMaterial in src/model.h
+layout(std140) uniform Material// Must match RS_GPUMaterial in src/model.h
 {
-    vec3 baseColor;         // offset 0
-    float metallic;         // offset 12
-    float roughness;        // offset 16
-    float transmission;     // offset 20
-    vec3 emissive;          // offset 32 (padding added by alignment)
-    float _padding;         // offset 44
-    ivec4 textureFlags;     // offset 48: [hasBaseColor, hasNormal, hasMetallicRoughness, hasEmissive]
+    vec3 baseColor;// offset 0
+    float metallic;// offset 12
+    float roughness;// offset 16
+    float transmission;// offset 20
+    vec3 emissive;// offset 32 (padding added by alignment)
+    float _padding;// offset 44
+    ivec4 textureFlags;// offset 48: [hasBaseColor, hasNormal, hasMetallicRoughness, hasEmissive]
 };
 
 uniform sampler2D colorMap;
@@ -27,57 +27,124 @@ in vec2 fragTexCoord;
 
 layout(location = 0) out vec4 fragColor;
 
+// Cook-Torrance: http://www.codinglabs.net/article_physically_based_rendering_cook_torrance.aspx
+
+const float PI = 3.1415926;
+const int sampleCount = 100;
+
+float chiGGX(float v)
+{
+    if (v > 0)
+    return 1.0;
+    else
+    return 0.0;
+}
+
+float saturate(float v)
+{
+    return clamp(v, 0.0, 1.0);
+}
+
+vec3 saturate3(vec3 v)
+{
+    return clamp(v, vec3(0.0), vec3(1.0));
+}
+
+float D_GGX(vec3 N, vec3 H, float a)
+{
+    // Distribution function (GGX)
+    float a2 = a * a;
+    float NoH = dot(N, H);
+    float NoH2 = NoH * NoH;
+    float den = NoH2 * a2 + (1 - NoH2);
+
+    return (chiGGX(NoH) * a2) / (PI * den * den);
+}
+
+float G_GGX_Partial(float NdotV, float roughness)
+{
+    // Smith-GGX geometry function (single direction)
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotV2 = NdotV * NdotV;
+
+    float nom = 2.0 * NdotV;
+    float denom = NdotV + sqrt(a2 + (1.0 - a2) * NdotV2);
+
+    return nom / denom;
+}
+
+vec3 F_Schlick(float cosT, vec3 F0)
+{
+    return F0 + (1 - F0) * pow(1 - cosT, 5);
+}
+
 void main()
 {
-    vec3 normal = normalize(fragNormal);
-    vec3 viewDir = normalize(cameraPosition - fragPosition); // View direction in world space
-    vec3 lightDir = normalize(lightPosition - fragPosition); // Light direction in world space
-    vec3 halfDir = normalize(lightDir + viewDir); // Halfway vector
+    // Cook-Torrance BRDF for a point light source
+    // f_r = kd * f_lambert + ks * f_cook_torrance
 
-    // Base color
+    vec3 N = normalize(fragNormal);
+    vec3 V = normalize(cameraPosition - fragPosition);
+    vec3 L = normalize(lightPosition - fragPosition);
+    vec3 H = normalize(V + L);
+
+    // Calculate angles
+    float NdotL = saturate(dot(N, L));
+    float NdotV = saturate(dot(N, V));
+    float NdotH = saturate(dot(N, H));
+    float VdotH = saturate(dot(V, H));
+
+    // Base color (albedo)
     vec3 albedo = baseColor;
     if (useMaterial && hasTexCoords && textureFlags.x == 1)
     {
         albedo *= texture(colorMap, fragTexCoord).rgb;
-    } // else use baseColor from material
+    }
 
-    // Ambient term (simple approximation)
+    // Fresnel reflectance at normal incidence
+    float ior = 1.5;
+    float f0 = pow((1.0 - ior) / (1.0 + ior), 2.0);
+    vec3 F0 = mix(vec3(f0), albedo, metallic);
+
+    // Cook-Torrance specular term
+    float a = roughness * roughness;
+
+    // D: GGX distribution
+    float D = D_GGX(N, H, a);
+
+    // F: Fresnel (Schlick)
+    vec3 F = F_Schlick(VdotH, F0);
+
+    // G: Geometry term (Smith's method)
+    float G = G_GGX_Partial(NdotV, roughness) * G_GGX_Partial(NdotL, roughness);
+
+    // Cook-Torrance specular BRDF
+    // Note: We don't include NdotL in the denominator, so we can apply it uniformly later
+    vec3 numerator = D * F * G;
+    float denominator = max(4.0 * NdotV, 0.001);
+    vec3 specular = numerator / denominator;
+
+    // Lambertian diffuse BRDF
+    vec3 kD = (vec3(1.0) - F) * (1.0 - metallic); // Energy conservation
+    vec3 diffuse = kD * albedo / PI;
+
+    // Combine with light contribution (rendering equation)
+    vec3 radiance = lightColor * lightIntensity;
+    vec3 color = (diffuse + specular) * radiance * NdotL;
+
+    // Add ambient term
     vec3 ambient = 0.03 * albedo;
+    color += ambient;
 
-    // Diffuse term (lambert; d = N * L)
-    float diff = max(dot(normal, lightDir), 0.0);
-    vec3 diffuse = diff * albedo * lightColor * lightIntensity;
+    // Add emissive
+    color += emissive;
 
-    // Specular term (Cook-Torrance) - https://graphicscompendium.com/gamedev/15-pbr && http://www.codinglabs.net/article_physically_based_rendering_cook_torrance.aspx
-    float rough = clamp(roughness, 0.05, 1.0);
-    float NdotH = max(dot(normal, halfDir), 0.0);
-    float NdotV = max(dot(normal, viewDir), 0.0);
-    float NdotL = max(dot(normal, lightDir), 0.0);
-    float VdotH = max(dot(viewDir, halfDir), 0.0);
+    // Tone mapping
+    color = color / (color + vec3(1.0));
 
-    // Fresnel (Schlick's approximation)
-    vec3 F0 = mix(vec3(0.04), albedo, metallic);
-    vec3 F = F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
-
-    // Distribution function (GGX)
-    float alpha = rough * rough;
-    float alpha2 = alpha * alpha;
-    float denom = (NdotH * NdotH) * (alpha2 - 1.0) + 1.0;
-    float D = alpha2 / (3.14159265 * denom * denom);
-
-    // Geometry function (Schlick-GGX)
-    float k = (rough + 1.0) * (rough + 1.0) / 8.0;
-    float G_V = NdotV / (NdotV * (1.0 - k) + k);
-    float G_L = NdotL / (NdotL * (1.0 - k) + k);
-    float G = G_V * G_L;
-
-    vec3 specular = (D * F * G) / (4.0 * NdotV * NdotL + 0.001);
-
-    vec3 color = ambient + diffuse + specular;
-    color = color * (1.0 - transmission) + albedo * transmission; // Simple transmission model
-    color += emissive; // Add emissive component
-    color = color / (color + vec3(1.0)); // Tone mapping
-    color = pow(color, vec3(1.0/2.2)); // Gamma correction
+    // Gamma correction
+    color = pow(color, vec3(1.0/2.2));
 
     fragColor = vec4(color, 1.0);
 }
