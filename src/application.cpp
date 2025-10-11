@@ -1,6 +1,6 @@
 //#include "Image.h"
-#include "mesh.h"
-#include "texture.h"
+#include "constants.h"
+#include "scene.h"
 // Always include window first (because it includes glfw, which includes GL which needs to be included AFTER glew).
 // Can't wait for modules to fix this stuff...
 #include <framework/disable_all_warnings.h>
@@ -16,16 +16,17 @@ DISABLE_WARNINGS_PUSH()
 #include <imgui/imgui.h>
 DISABLE_WARNINGS_POP()
 #include <framework/shader.h>
+#include <framework/trackball.h>
 #include <framework/window.h>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <vector>
 
 class Application {
 public:
     Application()
-        : m_window("Final Project", glm::ivec2(1024, 1024), OpenGLVersion::GL41)
-        , m_texture(RESOURCE_ROOT "resources/checkerboard.png")
+        : m_window(RS_WINDOW_TITLE, RS_WINDOW_SIZE, OpenGLVersion::GL41)
     {
         m_window.registerKeyCallback([this](int key, int scancode, int action, int mods) {
             if (action == GLFW_PRESS)
@@ -33,15 +34,6 @@ public:
             else if (action == GLFW_RELEASE)
                 onKeyReleased(key, mods);
         });
-        m_window.registerMouseMoveCallback(std::bind(&Application::onMouseMove, this, std::placeholders::_1));
-        m_window.registerMouseButtonCallback([this](int button, int action, int mods) {
-            if (action == GLFW_PRESS)
-                onMouseClicked(button, mods);
-            else if (action == GLFW_RELEASE)
-                onMouseReleased(button, mods);
-        });
-
-        m_meshes = GPUMesh::loadMeshGPU(RESOURCE_ROOT "resources/dragon.obj");
 
         try {
             ShaderBuilder defaultBuilder;
@@ -62,51 +54,187 @@ public:
         } catch (ShaderLoadingException e) {
             std::cerr << e.what() << std::endl;
         }
+
+        // Create default scene
+        RS_Scene defaultScene;
+
+        // Add default light to the scene
+        RS_Light defaultLight;
+        defaultLight.position = glm::vec3(0.0f, 2.0f, 0.0f);
+        defaultLight.color = glm::vec3(1.0f, 1.0f, 1.0f);
+        defaultLight.intensity = 1.0f;
+        defaultScene.addLight(defaultLight);
+
+        // Add default camera to the scene
+        defaultScene.addCamera(std::make_unique<Trackball>(&m_window, glm::radians(80.0f), 4.0f));
+
+        // Load dragon model
+        RS_Model dragonModel;
+        std::vector<GPUMesh> dragonMeshes = GPUMesh::loadMeshGPU(RESOURCE_ROOT "resources/dragon.obj", true);
+
+        // Add all meshes to the model
+        for (GPUMesh& mesh : dragonMeshes) {
+            dragonModel.addMesh(std::move(mesh));
+
+            // Create a default material for each mesh
+            RS_Material defaultMaterial;
+            defaultMaterial.gpuData.baseColor = glm::vec3(0.8f, 0.8f, 0.8f);
+            defaultMaterial.gpuData.metallic = 0.0f;
+            defaultMaterial.gpuData.roughness = 0.5f;
+            defaultMaterial.gpuData.transmission = 0.0f;
+            defaultMaterial.gpuData.emissive = glm::vec3(0.0f);
+            defaultMaterial.gpuData.textureFlags = glm::ivec4(0);
+            dragonModel.addMaterial(defaultMaterial);
+        }
+
+        // Add dragon to scene
+        defaultScene.addModel(std::move(dragonModel));
+
+        // Add the default scene to the scenes
+        m_scenes.push_back(std::move(defaultScene));
+
+        Trackball::printHelp(); // Print camera controls to console
+    }
+
+    void render_imgui()
+    {
+        if (m_scenes.empty()) return;
+
+        RS_Scene& activeScene = m_scenes[m_activeSceneIndex];
+
+        ImGui::Begin("Window");
+
+        // Scene controls
+        ImGui::Separator();
+        ImGui::Text("Scenes");
+        ImGui::Text("Active Scene: %d / %zu", m_activeSceneIndex + 1, m_scenes.size());
+        if (ImGui::Button("Previous Scene") && m_activeSceneIndex > 0) {
+            m_activeSceneIndex--;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Next Scene") && m_activeSceneIndex < static_cast<int>(m_scenes.size()) - 1) {
+            m_activeSceneIndex++;
+        }
+
+        // Camera controls
+        ImGui::Separator();
+        ImGui::Text("Cameras");
+        int activeCameraIndex = activeScene.getActiveCameraIndex();
+        size_t cameraCount = activeScene.getCameras().size();
+        ImGui::Text("Active Camera: %d / %zu", activeCameraIndex + 1, cameraCount);
+
+        if (ImGui::BeginListBox("##cameras", ImVec2(-FLT_MIN, 4 * ImGui::GetTextLineHeightWithSpacing())))
+        {
+            for (size_t i = 0; i < cameraCount; i++) {
+                const bool isSelected = (i == static_cast<size_t>(activeCameraIndex));
+                if (ImGui::Selectable(("Camera " + std::to_string(i + 1)).c_str(), isSelected)) {
+                    activeCameraIndex = static_cast<int>(i);
+                    activeScene.setActiveCameraIndex(activeCameraIndex);
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndListBox();
+        }
+
+        // Lighting controls
+        ImGui::Separator();
+        ImGui::Text("Lights");
+        std::vector<RS_Light>& lights = activeScene.getLights();
+        ImGui::Text("Total Lights: %zu", lights.size());
+
+        size_t selected_light_index = 0;
+
+        if (ImGui::BeginListBox("##lights", ImVec2(-FLT_MIN, 4 * ImGui::GetTextLineHeightWithSpacing())))
+        {
+            for (size_t i = 0; i < lights.size(); i++) {
+                const bool isSelected = (i == static_cast<size_t>(activeCameraIndex));
+                if (ImGui::Selectable(("Light " + std::to_string(i + 1)).c_str(), isSelected)) {
+                    selected_light_index = i;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndListBox();
+        }
+
+        if (ImGui::Button("Add Light")) {
+            RS_Light newLight;
+            newLight.position = glm::vec3(0.0f, 2.0f, 0.0f);
+            newLight.color = glm::vec3(1.0f, 1.0f, 1.0f);
+            newLight.intensity = 1.0f;
+            activeScene.addLight(newLight);
+        }
+        if (!lights.empty()) {
+            RS_Light& selectedLight = lights[selected_light_index];
+            ImGui::DragFloat3("Position", glm::value_ptr(selectedLight.position), 0.1f);
+            ImGui::ColorEdit3("Color", glm::value_ptr(selectedLight.color));
+            ImGui::DragFloat("Intensity", &selectedLight.intensity, 0.1f, 0.0f, 100.0f);
+        }
+
+        // Model and Material controls
+        ImGui::Separator();
+        ImGui::Text("Models & Materials");
+        std::vector<RS_Model>& models = activeScene.getModels();
+        ImGui::Text("Total Models: %zu", models.size());
+
+        for (size_t modelIdx = 0; modelIdx < models.size(); modelIdx++) {
+            RS_Model& model = models[modelIdx];
+            ImGui::PushID(static_cast<int>(modelIdx));
+
+            if (ImGui::TreeNode(("Model " + std::to_string(modelIdx + 1)).c_str())) {
+                std::vector<RS_Material>& materials = model.getMaterials();
+                size_t meshCount = model.getMeshCount();
+
+                ImGui::Text("Meshes: %zu", meshCount);
+
+                for (size_t meshIdx = 0; meshIdx < meshCount && meshIdx < materials.size(); meshIdx++) {
+                    ImGui::PushID(static_cast<int>(meshIdx));
+
+                    if (ImGui::TreeNode(("Mesh " + std::to_string(meshIdx + 1)).c_str())) {
+                        RS_Material& material = materials[meshIdx];
+
+                        ImGui::ColorEdit3("Base Color", glm::value_ptr(material.gpuData.baseColor));
+                        ImGui::SliderFloat("Metallic", &material.gpuData.metallic, 0.0f, 1.0f);
+                        ImGui::SliderFloat("Roughness", &material.gpuData.roughness, 0.0f, 1.0f);
+                        ImGui::SliderFloat("Transmission", &material.gpuData.transmission, 0.0f, 1.0f);
+                        ImGui::ColorEdit3("Emissive", glm::value_ptr(material.gpuData.emissive));
+
+                        ImGui::TreePop();
+                    }
+
+                    ImGui::PopID();
+                }
+
+                ImGui::TreePop();
+            }
+
+            ImGui::PopID();
+        }
+
+        ImGui::End();
     }
 
     void update()
     {
-        int dummyInteger = 0; // Initialized to 0
         while (!m_window.shouldClose()) {
             // This is your game loop
             // Put your real-time logic and rendering in here
             m_window.updateInput();
 
-            // Use ImGui for easy input/output of ints, floats, strings, etc...
-            ImGui::Begin("Window");
-            ImGui::InputInt("This is an integer input", &dummyInteger); // Use ImGui::DragInt or ImGui::DragFloat for larger range of numbers.
-            ImGui::Text("Value is: %i", dummyInteger); // Use C printf formatting rules (%i is a signed integer)
-            ImGui::Checkbox("Use material if no texture", &m_useMaterial);
-            ImGui::End();
+            render_imgui();
 
             // Clear the screen
             glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            // ...
             glEnable(GL_DEPTH_TEST);
 
-            const glm::mat4 mvpMatrix = m_projectionMatrix * m_viewMatrix * m_modelMatrix;
-            // Normals should be transformed differently than positions (ignoring translations + dealing with scaling):
-            // https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
-            const glm::mat3 normalModelMatrix = glm::inverseTranspose(glm::mat3(m_modelMatrix));
-
-            for (GPUMesh& mesh : m_meshes) {
-                m_defaultShader.bind();
-                glUniformMatrix4fv(m_defaultShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-                //Uncomment this line when you use the modelMatrix (or fragmentPosition)
-                //glUniformMatrix4fv(m_defaultShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(m_modelMatrix));
-                glUniformMatrix3fv(m_defaultShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
-                if (mesh.hasTextureCoords()) {
-                    m_texture.bind(GL_TEXTURE0);
-                    glUniform1i(m_defaultShader.getUniformLocation("colorMap"), 0);
-                    glUniform1i(m_defaultShader.getUniformLocation("hasTexCoords"), GL_TRUE);
-                    glUniform1i(m_defaultShader.getUniformLocation("useMaterial"), GL_FALSE);
-                } else {
-                    glUniform1i(m_defaultShader.getUniformLocation("hasTexCoords"), GL_FALSE);
-                    glUniform1i(m_defaultShader.getUniformLocation("useMaterial"), m_useMaterial);
-                }
-                mesh.draw(m_defaultShader);
+            // Draw the active scene
+            if (!m_scenes.empty()) {
+                m_scenes[m_activeSceneIndex].draw(m_defaultShader);
             }
 
             // Processes input and swaps the window buffer
@@ -159,14 +287,9 @@ private:
     Shader m_defaultShader;
     Shader m_shadowShader;
 
-    std::vector<GPUMesh> m_meshes;
-    Texture m_texture;
-    bool m_useMaterial { true };
-
-    // Projection and view matrices for you to fill in and use
-    glm::mat4 m_projectionMatrix = glm::perspective(glm::radians(80.0f), 1.0f, 0.1f, 30.0f);
-    glm::mat4 m_viewMatrix = glm::lookAt(glm::vec3(-1, 1, -1), glm::vec3(0), glm::vec3(0, 1, 0));
-    glm::mat4 m_modelMatrix { 1.0f };
+    // Scene system
+    std::vector<RS_Scene> m_scenes;
+    int m_activeSceneIndex { 0 };
 };
 
 int main()
