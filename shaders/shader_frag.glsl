@@ -27,11 +27,10 @@ in vec2 fragTexCoord;
 
 layout(location = 0) out vec4 fragColor;
 
-// Cook-Torrance: http://www.codinglabs.net/article_physically_based_rendering_cook_torrance.aspx
 
 const float PI = 3.1415926;
-const int sampleCount = 100;
 
+// Cook-Torrance: http://www.codinglabs.net/article_physically_based_rendering_cook_torrance.aspx
 float chiGGX(float v)
 {
     if (v > 0)
@@ -120,7 +119,6 @@ void main()
     float G = G_GGX_Partial(NdotV, roughness) * G_GGX_Partial(NdotL, roughness);
 
     // Cook-Torrance specular BRDF
-    // Note: We don't include NdotL in the denominator, so we can apply it uniformly later
     vec3 numerator = D * F * G;
     float denominator = max(4.0 * NdotV, 0.001);
     vec3 specular = numerator / denominator;
@@ -133,17 +131,12 @@ void main()
     vec3 radiance = lightColor * lightIntensity;
     vec3 color = (diffuse + specular) * radiance * NdotL;
 
-    // Add ambient term
-    vec3 ambient = 0.03 * albedo;
-    color += ambient;
-
     // Add emissive
     color += emissive;
 
     // Tone mapping
     color = color / (color + vec3(1.0));
 
-    // Gamma correction
     color = pow(color, vec3(1.0/2.2));
 
     fragColor = vec4(color, 1.0);

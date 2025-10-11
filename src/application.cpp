@@ -10,9 +10,7 @@ DISABLE_WARNINGS_PUSH()
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/mat4x4.hpp>
 #include <imgui/imgui.h>
 DISABLE_WARNINGS_POP()
 #include <framework/shader.h>
@@ -35,6 +33,14 @@ public:
                 onKeyReleased(key, mods);
         });
 
+        m_window.registerWindowResizeCallback([this](const glm::ivec2& newSize) {
+            glViewport(0, 0, newSize.x, newSize.y);
+        });
+
+        // Set initial viewport size
+        glm::ivec2 windowSize = m_window.getWindowSize();
+        glViewport(0, 0, windowSize.x, windowSize.y);
+
         try {
             ShaderBuilder defaultBuilder;
             defaultBuilder.addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl");
@@ -46,14 +52,81 @@ public:
             shadowBuilder.addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "Shaders/shadow_frag.glsl");
             m_shadowShader = shadowBuilder.build();
 
-            // Any new shaders can be added below in similar fashion.
-            // ==> Don't forget to reconfigure CMake when you do!
-            //     Visual Studio: PROJECT => Generate Cache for ComputerGraphics
-            //     VS Code: ctrl + shift + p => CMake: Configure => enter
-            // ....
+            ShaderBuilder lightBuilder;
+            lightBuilder.addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/light_vert.glsl");
+            lightBuilder.addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_frag.glsl");
+            m_lightShader = lightBuilder.build();
+
+            ShaderBuilder envBuilder;
+            envBuilder.addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/env_vert.glsl");
+            envBuilder.addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/env_frag.glsl");
+            m_envShader = envBuilder.build();
+
+            ShaderBuilder skyboxBuilder;
+            skyboxBuilder.addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/skybox_vert.glsl");
+            skyboxBuilder.addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/skybox_frag.glsl");
+            m_skyboxShader = skyboxBuilder.build();
+
         } catch (ShaderLoadingException e) {
             std::cerr << e.what() << std::endl;
         }
+
+        glGenVertexArrays(1, &m_lightVAO);
+
+        // Create skybox cube VAO
+        float skyboxVertices[] = {
+            // positions
+            -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,
+             1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+
+            -1.0f, -1.0f,  1.0f,
+            -1.0f, -1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
+
+             1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,
+
+            -1.0f, -1.0f,  1.0f,
+            -1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,
+             1.0f, -1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
+
+            -1.0f,  1.0f, -1.0f,
+             1.0f,  1.0f, -1.0f,
+             1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,
+            -1.0f,  1.0f,  1.0f,
+            -1.0f,  1.0f, -1.0f,
+
+            -1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,
+             1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,
+             1.0f, -1.0f,  1.0f
+        };
+
+        GLuint skyboxVBO;
+        glGenVertexArrays(1, &m_skyboxVAO);
+        glGenBuffers(1, &skyboxVBO);
+        glBindVertexArray(m_skyboxVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
         // Create default scene
         RS_Scene defaultScene;
@@ -90,6 +163,9 @@ public:
         // Add dragon to scene
         defaultScene.addModel(std::move(dragonModel));
 
+        // Add environment map to scene
+        defaultScene.setEnvironmentMap(RESOURCE_ROOT "resources/envmap/pure_sky.hdr");
+
         // Add the default scene to the scenes
         m_scenes.push_back(std::move(defaultScene));
 
@@ -112,7 +188,7 @@ public:
             m_activeSceneIndex--;
         }
         ImGui::SameLine();
-        if (ImGui::Button("Next Scene") && m_activeSceneIndex < static_cast<int>(m_scenes.size()) - 1) {
+        if (ImGui::Button("Next Scene") && m_activeSceneIndex < m_scenes.size() - 1) {
             m_activeSceneIndex++;
         }
 
@@ -144,14 +220,12 @@ public:
         std::vector<RS_Light>& lights = activeScene.getLights();
         ImGui::Text("Total Lights: %zu", lights.size());
 
-        size_t selected_light_index = 0;
-
         if (ImGui::BeginListBox("##lights", ImVec2(-FLT_MIN, 4 * ImGui::GetTextLineHeightWithSpacing())))
         {
             for (size_t i = 0; i < lights.size(); i++) {
-                const bool isSelected = (i == static_cast<size_t>(activeCameraIndex));
+                const bool isSelected = (i == static_cast<size_t>(m_selectedLightIndex));
                 if (ImGui::Selectable(("Light " + std::to_string(i + 1)).c_str(), isSelected)) {
-                    selected_light_index = i;
+                    m_selectedLightIndex = i;
                 }
                 if (isSelected) {
                     ImGui::SetItemDefaultFocus();
@@ -168,10 +242,20 @@ public:
             activeScene.addLight(newLight);
         }
         if (!lights.empty()) {
-            RS_Light& selectedLight = lights[selected_light_index];
+            RS_Light& selectedLight = lights[m_selectedLightIndex];
             ImGui::DragFloat3("Position", glm::value_ptr(selectedLight.position), 0.1f);
             ImGui::ColorEdit3("Color", glm::value_ptr(selectedLight.color));
             ImGui::DragFloat("Intensity", &selectedLight.intensity, 0.1f, 0.0f, 100.0f);
+        }
+
+        // Environment Map controls
+        ImGui::Separator();
+        ImGui::Text("Environment Map");
+        if (activeScene.getEnvironmentCubemap()) {
+            float& envBrightness = activeScene.getEnvironmentBrightness();
+            ImGui::SliderFloat("Brightness", &envBrightness, 0.0f, 2.0f);
+        } else {
+            ImGui::TextDisabled("No environment map loaded");
         }
 
         // Model and Material controls
@@ -219,6 +303,47 @@ public:
         ImGui::End();
     }
 
+    void draw_lights(RS_Scene& activeScene)
+    {
+        // Render debug lights if enabled
+        if (m_debug && !activeScene.getLights().empty()) {
+            glDisable(GL_DEPTH_TEST);
+
+            const Trackball& camera = activeScene.getActiveCamera();
+            const glm::mat4 viewMatrix = camera.viewMatrix();
+            const glm::mat4 projectionMatrix = camera.projectionMatrix();
+            const glm::mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+
+            m_lightShader.bind();
+
+            // Render selected light with yellow color and larger size
+            {
+                const std::vector<RS_Light>& lights = activeScene.getLights();
+                const glm::vec4 screenPos = viewProjectionMatrix * glm::vec4(lights[m_selectedLightIndex].position, 1.0f);
+                const glm::vec3 color{1, 1, 0};
+
+                glPointSize(40.0f);
+                glUniform4fv(m_lightShader.getUniformLocation("pos"), 1, glm::value_ptr(screenPos));
+                glUniform3fv(m_lightShader.getUniformLocation("color"), 1, glm::value_ptr(color));
+                glBindVertexArray(m_lightVAO);
+                glDrawArrays(GL_POINTS, 0, 1);
+                glBindVertexArray(0);
+            }
+
+            // Render all lights with their colors
+            for (const RS_Light& light : activeScene.getLights()) {
+                const glm::vec4 screenPos = viewProjectionMatrix * glm::vec4(light.position, 1.0f);
+
+                glPointSize(10.0f);
+                glUniform4fv(m_lightShader.getUniformLocation("pos"), 1, glm::value_ptr(screenPos));
+                glUniform3fv(m_lightShader.getUniformLocation("color"), 1, glm::value_ptr(light.color));
+                glBindVertexArray(m_lightVAO);
+                glDrawArrays(GL_POINTS, 0, 1);
+                glBindVertexArray(0);
+            }
+        }
+    }
+
     void update()
     {
         while (!m_window.shouldClose()) {
@@ -236,7 +361,19 @@ public:
 
             // Draw the active scene
             if (!m_scenes.empty()) {
-                m_scenes[m_activeSceneIndex].draw(m_defaultShader, m_debug);
+                RS_Scene& activeScene = m_scenes[m_activeSceneIndex];
+
+                // Draw skybox background first
+                activeScene.drawSkybox(m_skyboxShader, m_skyboxVAO);
+
+                // Draw environment map
+                activeScene.drawEnvironment(m_envShader);
+
+                // Draw direct lighting
+                activeScene.draw(m_defaultShader);
+
+                // Draw debug lights
+                draw_lights(activeScene);
             }
 
             // Processes input and swaps the window buffer
@@ -290,15 +427,23 @@ public:
 private:
     Window m_window;
 
-    // Shader for default rendering and for depth rendering
+    // Shaders
     Shader m_defaultShader;
     Shader m_shadowShader;
+    Shader m_lightShader;
+    Shader m_envShader;
+    Shader m_skyboxShader;
+
+    unsigned int m_lightVAO = 0;
+    unsigned int m_skyboxVAO = 0;
+
+    size_t m_selectedLightIndex = 0;
 
     bool m_debug = true;
 
     // Scene system
     std::vector<RS_Scene> m_scenes;
-    int m_activeSceneIndex { 0 };
+    size_t m_activeSceneIndex { 0 };
 };
 
 int main()

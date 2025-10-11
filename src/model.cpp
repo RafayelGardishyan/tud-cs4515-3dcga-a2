@@ -27,9 +27,11 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
     // Set per-model uniforms
     glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(mvpMatrix));
     glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(m_model_matrix));
-    glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE, glm::value_ptr(normalModelMatrix));
+    glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE,
+                       glm::value_ptr(normalModelMatrix));
 
-    for (size_t i = 0; i < m_meshes.size(); i++) {
+    for (size_t i = 0; i < m_meshes.size(); i++)
+    {
         // Bind material i
         const RS_Material& material = m_materials[i];
 
@@ -39,14 +41,20 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
         drawShader.bindUniformBlock("Material", 0, m_material_UBO);
 
         // Bind textures
-        if (material.baseColorTex) {
+        if (material.baseColorTex)
+        {
             material.baseColorTex->bind(GL_TEXTURE0);
-            glUniform1i(drawShader.getUniformLocation("baseColorTex"), 0);
+            GLint texLoc = drawShader.getUniformLocation("baseColorTex");
+            if (texLoc != -1)
+            {
+                glUniform1i(texLoc, 0);
+            }
         }
 
-        // Set hasTexCoords and useMaterial uniforms
+
         glUniform1i(drawShader.getUniformLocation("hasTexCoords"), m_meshes[i].hasTextureCoords() ? 1 : 0);
         glUniform1i(drawShader.getUniformLocation("useMaterial"), 1);
+
 
         // Draw mesh
         m_meshes[i].draw(drawShader);
@@ -62,4 +70,3 @@ void RS_Model::addMaterial(const RS_Material& material)
 {
     m_materials.push_back(std::move(material));
 }
-

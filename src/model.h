@@ -27,11 +27,11 @@ struct RS_Material
 {
     RS_GPUMaterial gpuData;
 
-    // CPU-side texture references (bind these separately when rendering)
-    Texture* baseColorTex = nullptr;
-    Texture* normalTex = nullptr;
-    Texture* metallicRoughnessTex = nullptr;
-    Texture* emissiveTex = nullptr;
+    // CPU-side texture references
+    RS_Texture* baseColorTex = nullptr;
+    RS_Texture* normalTex = nullptr;
+    RS_Texture* metallicRoughnessTex = nullptr;
+    RS_Texture* emissiveTex = nullptr;
 };
 
 class RS_Model

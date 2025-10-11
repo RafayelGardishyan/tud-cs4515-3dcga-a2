@@ -4,29 +4,29 @@
 
 #ifndef COMPUTERGRAPHICS_RSSCENE_H
 #define COMPUTERGRAPHICS_RSSCENE_H
+#include <utility>
 #include <vector>
 
 #include "light.h"
 #include "model.h"
+#include "texture.h"
+#include "cubemap.h"
 #include "framework/trackball.h"
 #include "framework/shader.h"
 
 class RS_Scene
 {
 public:
-    RS_Scene();
-    ~RS_Scene();
+    RS_Scene() = default;
 
-    // Delete copy constructor and copy assignment (scenes shouldn't be copied)
-    RS_Scene(const RS_Scene&) = delete;
-    RS_Scene& operator=(const RS_Scene&) = delete;
+    // Draw the entire scene
+    void draw(const Shader& drawShader);
 
-    // Move constructor and move assignment
-    RS_Scene(RS_Scene&& other) noexcept;
-    RS_Scene& operator=(RS_Scene&& other) noexcept;
+    // Draw environment map contribution
+    void drawEnvironment(const Shader& envShader);
 
-    // Draw the entire scene with multi-pass lighting
-    void draw(const Shader& drawShader, bool debugLights);
+    // Draw skybox background
+    void drawSkybox(const Shader& skyboxShader, GLuint skyboxVAO);
 
     // These functions are called by the application
     void onKeyPressed(int key, int mods) {};
@@ -55,15 +55,33 @@ public:
     void addModel(RS_Model&& model) { m_models.push_back(std::move(model)); }
     size_t getModelCount() const { return m_models.size(); }
 
+    // Environment map management
+    RS_Cubemap* getEnvironmentCubemap() { return m_environmentCubemap.get(); }
+    const RS_Cubemap* getEnvironmentCubemap() const { return m_environmentCubemap.get(); }
+    void setEnvironmentMap(std::filesystem::path filePath, bool isHDR = true, int cubemapResolution = 512) {
+        // Load the equirectangular texture
+        auto equirectTexture = std::make_unique<RS_Texture>(std::move(filePath), isHDR);
+        equirectTexture->setEnvironmentMapWrapping();
+
+        // Convert to cubemap
+        m_environmentCubemap = std::make_unique<RS_Cubemap>(*equirectTexture, cubemapResolution);
+    }
+
+    // Environment brightness control
+    float& getEnvironmentBrightness() { return m_envBrightness; }
+    float getEnvironmentBrightness() const { return m_envBrightness; }
+    void setEnvironmentBrightness(float brightness) { m_envBrightness = brightness; }
+
 private:
     // Models (meshes + materials + transforms)
     std::vector<RS_Model> m_models;
 
     // Lights
     std::vector<RS_Light> m_lights;
-    size_t m_selectedLightIndex = 0;
-    Shader m_lightShader;
-    unsigned int m_lightVAO = 0;
+
+    //Environment map
+    std::unique_ptr<RS_Cubemap> m_environmentCubemap { nullptr };
+    float m_envBrightness { 0.5f }; // Default brightness
 
     // Cameras
     std::vector<std::unique_ptr<Trackball>> m_cameras;

@@ -9,64 +9,7 @@ DISABLE_WARNINGS_PUSH()
 #include <glm/gtc/type_ptr.hpp>
 DISABLE_WARNINGS_POP()
 
-RS_Scene::RS_Scene()
-{
-    m_lightShader = ShaderBuilder()
-        .addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/light_vert.glsl")
-        .addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_frag.glsl")
-        .build();
-
-    // Create VAO for light visualization (no VBO needed - drawing points)
-    glGenVertexArrays(1, &m_lightVAO);
-}
-
-RS_Scene::~RS_Scene()
-{
-    // Clean up light VAO
-    if (m_lightVAO != 0) {
-        glDeleteVertexArrays(1, &m_lightVAO);
-    }
-}
-
-// Move constructor
-RS_Scene::RS_Scene(RS_Scene&& other) noexcept
-    : m_models(std::move(other.m_models)),
-      m_lights(std::move(other.m_lights)),
-      m_selectedLightIndex(other.m_selectedLightIndex),
-      m_lightShader(std::move(other.m_lightShader)),
-      m_lightVAO(other.m_lightVAO),
-      m_cameras(std::move(other.m_cameras)),
-      m_activeCameraIndex(other.m_activeCameraIndex)
-{
-    // Transfer ownership - prevent other from deleting the VAO
-    other.m_lightVAO = 0;
-}
-
-// Move assignment operator
-RS_Scene& RS_Scene::operator=(RS_Scene&& other) noexcept
-{
-    if (this != &other) {
-        // Clean up this object's resources
-        if (m_lightVAO != 0) {
-            glDeleteVertexArrays(1, &m_lightVAO);
-        }
-
-        // Transfer ownership from other
-        m_models = std::move(other.m_models);
-        m_lights = std::move(other.m_lights);
-        m_selectedLightIndex = other.m_selectedLightIndex;
-        m_lightShader = std::move(other.m_lightShader);
-        m_lightVAO = other.m_lightVAO;
-        m_cameras = std::move(other.m_cameras);
-        m_activeCameraIndex = other.m_activeCameraIndex;
-
-        // Prevent other from deleting the VAO
-        other.m_lightVAO = 0;
-    }
-    return *this;
-}
-
-void RS_Scene::draw(const Shader& drawShader, bool debugLights)
+void RS_Scene::draw(const Shader& drawShader)
 {
     if (m_cameras.empty()) {
         // No camera to render from
@@ -84,53 +27,76 @@ void RS_Scene::draw(const Shader& drawShader, bool debugLights)
 
     // Multi-pass lighting: render scene once for each light with additive blending
     for (size_t lightIndex = 0; lightIndex < m_lights.size(); lightIndex++) {
-        // Enable additive blending for lights after the first one
-        if (lightIndex == 0) {
-            glDisable(GL_BLEND);
-        } else {
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_ONE, GL_ONE); // Additive blending
-            glDepthFunc(GL_EQUAL);       // Only render fragments at the same depth
-        }
+        // Enable additive blending for all lights
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE);
+        glDepthFunc(GL_EQUAL);
 
         glUniform3fv(drawShader.getUniformLocation("cameraPosition"), 1, glm::value_ptr(camera.position()));
         glUniform3fv(drawShader.getUniformLocation("lightPosition"), 1, glm::value_ptr(m_lights[lightIndex].position));
         glUniform3fv(drawShader.getUniformLocation("lightColor"), 1, glm::value_ptr(m_lights[lightIndex].color));
         glUniform1f(drawShader.getUniformLocation("lightIntensity"), m_lights[lightIndex].intensity);
 
-        // Draw all models
         for (RS_Model& model : m_models) {
             model.draw(drawShader, viewProjectionMatrix);
         }
     }
 
-    // Reset OpenGL state
     glDisable(GL_BLEND);
     glDepthFunc(GL_LESS);
+}
 
-    // Render the lights is debug is enabled:
-    m_lightShader.bind();
-    {
-        const glm::vec4 screenPos = viewProjectionMatrix * glm::vec4(m_lights[m_selectedLightIndex].position, 1.0f);
-        const glm::vec3 color{1, 1, 0};
-
-        glPointSize(40.0f);
-        glUniform4fv(m_lightShader.getUniformLocation("pos"), 1, glm::value_ptr(screenPos));
-        glUniform3fv(m_lightShader.getUniformLocation("color"), 1, glm::value_ptr(color));
-        glBindVertexArray(m_lightVAO);
-        glDrawArrays(GL_POINTS, 0, 1);
-        glBindVertexArray(0);
-    }
-    for (const RS_Light& light : m_lights)
-    {
-        const glm::vec4 screenPos = viewProjectionMatrix * glm::vec4(light.position, 1.0f);
-
-        glPointSize(10.0f);
-        glUniform4fv(m_lightShader.getUniformLocation("pos"), 1, glm::value_ptr(screenPos));
-        glUniform3fv(m_lightShader.getUniformLocation("color"), 1, glm::value_ptr(light.color));
-        glBindVertexArray(m_lightVAO);
-        glDrawArrays(GL_POINTS, 0, 1);
-        glBindVertexArray(0);
+void RS_Scene::drawEnvironment(const Shader& envShader)
+{
+    if (m_cameras.empty() || !m_environmentCubemap) {
+        return;
     }
 
+    // Bind the environment shader
+    envShader.bind();
+
+    const Trackball& camera = getActiveCamera();
+    const glm::mat4 viewMatrix = camera.viewMatrix();
+    const glm::mat4 projectionMatrix = camera.projectionMatrix();
+    const glm::mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+
+    glActiveTexture(GL_TEXTURE0);
+    m_environmentCubemap->bind(GL_TEXTURE0);
+    glUniform1i(envShader.getUniformLocation("environmentMap"), 0);
+    glUniform3fv(envShader.getUniformLocation("cameraPosition"), 1, glm::value_ptr(camera.position()));
+    glUniform1f(envShader.getUniformLocation("envBrightness"), m_envBrightness);
+
+    // Draw all models with environment shader (writes depth)
+    for (RS_Model& model : m_models) {
+        model.draw(envShader, viewProjectionMatrix);
+    }
+}
+
+void RS_Scene::drawSkybox(const Shader& skyboxShader, GLuint skyboxVAO)
+{
+    if (m_cameras.empty() || !m_environmentCubemap) {
+        return;
+    }
+
+    skyboxShader.bind();
+
+    const Trackball& camera = getActiveCamera();
+    const glm::mat4 viewMatrix = camera.viewMatrix();
+    const glm::mat4 projectionMatrix = camera.projectionMatrix();
+
+    glUniformMatrix4fv(skyboxShader.getUniformLocation("view"), 1, GL_FALSE, glm::value_ptr(viewMatrix));
+    glUniformMatrix4fv(skyboxShader.getUniformLocation("projection"), 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+    glUniform1f(skyboxShader.getUniformLocation("envBrightness"), m_envBrightness);
+
+    // Bind cubemap
+    glActiveTexture(GL_TEXTURE0);
+    m_environmentCubemap->bind(GL_TEXTURE0);
+    glUniform1i(skyboxShader.getUniformLocation("skybox"), 0);
+
+    // Render skybox at maximum depth
+    glDepthFunc(GL_LEQUAL);
+    glBindVertexArray(skyboxVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glBindVertexArray(0);
+    glDepthFunc(GL_LESS);
 }
