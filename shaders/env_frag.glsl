@@ -15,14 +15,19 @@ uniform vec3 cameraPosition;
 uniform samplerCube environmentMap;
 uniform float envBrightness;
 
+uniform bool useMaterial;
+uniform bool hasTexCoords;
+uniform sampler2D colorMap;
+
 in vec3 fragPosition;
 in vec3 fragNormal;
+in vec2 fragTexCoord;
 
 layout(location = 0) out vec4 fragColor;
 
 const float PI = 3.1415926;
 
-const float environmentIntensity = 1.0;
+const float environmentIntensity = .3;
 
 vec3 textureSample(samplerCube map, vec3 dir, float roughness, float spreadFactor)
 {
@@ -53,17 +58,24 @@ void main()
 
     vec3 diffuseEnv = textureSample(environmentMap, N, roughness, 5).rgb;
 
+    vec3 albedo = baseColor;
+    if (useMaterial && hasTexCoords && textureFlags.x == 1)
+    {
+        albedo = texture(colorMap, fragTexCoord).rgb;
+    }
+
+
     float NdotV = max(dot(N, V), 0.0);
     float ior = 1.5;
     float f0_dielectric = pow((1.0 - ior) / (1.0 + ior), 2.0); // ~0.04 for ior=1.5
-    vec3 F0 = mix(vec3(f0_dielectric), baseColor, metallic); // mix baseColor for metals
+    vec3 F0 = mix(vec3(f0_dielectric), albedo, metallic); // mix baseColor for metals
     vec3 F = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0); // Schlick
 
     vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
 
     vec3 specEnv = textureSample(environmentMap, R, roughness, roughness * 5).rgb;
 
-    vec3 envDiffuse  = diffuseEnv * baseColor * kD * envBrightness * (1.0 / PI);
+    vec3 envDiffuse  = diffuseEnv * albedo * kD * envBrightness * (1.0 / PI);
     vec3 envSpecular = specEnv * F * envBrightness;
 
     vec3 color = envDiffuse + envSpecular;

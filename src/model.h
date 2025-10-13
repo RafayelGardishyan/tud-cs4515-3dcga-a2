@@ -6,6 +6,12 @@
 #define COMPUTERGRAPHICS_RSMODEL_H
 #include "mesh.h"
 #include "texture.h"
+#include <memory>
+
+inline glm::ivec4 RS_HAS_COLOR_TEX = {1, 0, 0, 0};
+inline glm::ivec4 RS_HAS_NORMAL_TEX = {0, 1, 0, 0};
+inline glm::ivec4 RS_HAS_METALLIC_ROUGHNESS_TEX = {0, 0, 1, 0};
+inline glm::ivec4 RS_HAS_EMISSIVE_TEX = {0, 0, 0, 1};
 
 // GPU-compatible material struct (std140 layout)
 // Note: Textures are bound separately, not stored in the uniform buffer!
@@ -27,11 +33,13 @@ struct RS_Material
 {
     RS_GPUMaterial gpuData;
 
-    // CPU-side texture references
-    RS_Texture* baseColorTex = nullptr;
-    RS_Texture* normalTex = nullptr;
-    RS_Texture* metallicRoughnessTex = nullptr;
-    RS_Texture* emissiveTex = nullptr;
+    std::unique_ptr<RS_Texture> baseColorTex = nullptr;
+    std::unique_ptr<RS_Texture> normalTex = nullptr;
+    std::unique_ptr<RS_Texture> metallicRoughnessTex = nullptr;
+    std::unique_ptr<RS_Texture> emissiveTex = nullptr;
+
+    // Helper function to create material from framework mesh material
+    static RS_Material createFromMesh(const GPUMesh& mesh);
 };
 
 class RS_Model
@@ -42,7 +50,7 @@ public:
 
     void draw(const Shader& drawShader, const glm::mat4& viewProjectionMatrix);
     void addMesh(GPUMesh&& mesh);
-    void addMaterial(const RS_Material& material);
+    void addMaterial(RS_Material&& material);
 
     // Getters for ImGui editing
     std::vector<RS_Material>& getMaterials() { return m_materials; }

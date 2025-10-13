@@ -3,6 +3,7 @@
 DISABLE_WARNINGS_PUSH()
 #include <stb/stb_image.h>
 DISABLE_WARNINGS_POP()
+#include <framework/image.h>
 #include <iostream>
 #include <string>
 #include <algorithm>
@@ -104,6 +105,50 @@ RS_Texture::RS_Texture(std::filesystem::path filePath, bool isHDR)
     stbi_image_free(data);
 
     std::cout << "Loaded " << (m_isHDR ? "HDR" : "LDR") << " texture: " << filePath
+              << " (" << m_width << "x" << m_height << ", " << m_channels << " channels)" << std::endl;
+}
+
+RS_Texture::RS_Texture(const Image& image)
+    : m_width(image.width)
+    , m_height(image.height)
+    , m_channels(image.channels)
+    , m_isHDR(false)
+{
+    // Create OpenGL texture
+    glGenTextures(1, &m_texture);
+    glBindTexture(GL_TEXTURE_2D, m_texture);
+
+    // Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // Get raw pixel data from Image
+    unsigned char* data = const_cast<unsigned char*>(
+        reinterpret_cast<const unsigned char*>(const_cast<Image&>(image).get_data())
+    );
+
+    // Upload texture data based on channels
+    switch (m_channels) {
+        case 1:
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, m_width, m_height, 0, GL_RED, GL_UNSIGNED_BYTE, data);
+            break;
+        case 3:
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, m_width, m_height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            break;
+        case 4:
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+            break;
+        default:
+            std::cerr << "Unsupported number of channels: " << m_channels << std::endl;
+            throw ImageLoadingException("Unsupported number of channels");
+    }
+
+    // Generate mipmaps
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    std::cout << "Loaded texture from Image: "
               << " (" << m_width << "x" << m_height << ", " << m_channels << " channels)" << std::endl;
 }
 

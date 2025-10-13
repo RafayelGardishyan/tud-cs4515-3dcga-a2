@@ -3,12 +3,39 @@
 //
 
 #include "model.h"
+#include <framework/mesh.h>
+#include <iostream>
 #include <framework/disable_all_warnings.h>
 DISABLE_WARNINGS_PUSH()
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 DISABLE_WARNINGS_POP()
+
+RS_Material RS_Material::createFromMesh(const GPUMesh& mesh)
+{
+    RS_Material material;
+    const Material& cpuMaterial = mesh.getMaterial();
+
+    material.gpuData.baseColor = cpuMaterial.kd;
+    material.gpuData.metallic = 0.0f;
+    material.gpuData.roughness = 0.5f;
+    material.gpuData.transmission = 0.0f;
+    material.gpuData.emissive = glm::vec3(0.0f);
+    material.gpuData.textureFlags = glm::ivec4(0);
+
+    if (cpuMaterial.kdTexture) {
+        try {
+            material.baseColorTex = std::make_unique<RS_Texture>(*cpuMaterial.kdTexture);
+            material.gpuData.textureFlags += RS_HAS_COLOR_TEX;
+            std::cout << "Loaded base color texture from mesh material" << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to load base color texture: " << e.what() << std::endl;
+        }
+    }
+
+    return material;
+}
 
 RS_Model::RS_Model()
 {
@@ -43,11 +70,11 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
         // Bind textures
         if (material.baseColorTex)
         {
-            material.baseColorTex->bind(GL_TEXTURE0);
-            GLint texLoc = drawShader.getUniformLocation("baseColorTex");
+            material.baseColorTex->bind(GL_TEXTURE1);
+            GLint texLoc = drawShader.getUniformLocation("colorMap");
             if (texLoc != -1)
             {
-                glUniform1i(texLoc, 0);
+                glUniform1i(texLoc, 1);
             }
         }
 
@@ -66,7 +93,7 @@ void RS_Model::addMesh(GPUMesh&& mesh)
     m_meshes.push_back(std::move(mesh));
 }
 
-void RS_Model::addMaterial(const RS_Material& material)
+void RS_Model::addMaterial(RS_Material&& material)
 {
     m_materials.push_back(std::move(material));
 }

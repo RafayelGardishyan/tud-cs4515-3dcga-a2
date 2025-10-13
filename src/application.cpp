@@ -142,26 +142,20 @@ public:
         defaultScene.addCamera(std::make_unique<Trackball>(&m_window, glm::radians(80.0f), 4.0f));
 
         // Load dragon model
-        RS_Model dragonModel;
-        std::vector<GPUMesh> dragonMeshes = GPUMesh::loadMeshGPU(RESOURCE_ROOT "resources/dragon.obj", true);
+        RS_Model shipModel;
+        std::vector<GPUMesh> shipMeshes = GPUMesh::loadMeshGPU(RESOURCE_ROOT "resources/ship/ship.obj", true);
 
         // Add all meshes to the model
-        for (GPUMesh& mesh : dragonMeshes) {
-            dragonModel.addMesh(std::move(mesh));
+        for (GPUMesh& mesh : shipMeshes) {
+            // Create material from mesh data (automatically loads textures)
+            RS_Material material = RS_Material::createFromMesh(mesh);
 
-            // Create a default material for each mesh
-            RS_Material defaultMaterial;
-            defaultMaterial.gpuData.baseColor = glm::vec3(0.8f, 0.8f, 0.8f);
-            defaultMaterial.gpuData.metallic = 0.0f;
-            defaultMaterial.gpuData.roughness = 0.5f;
-            defaultMaterial.gpuData.transmission = 0.0f;
-            defaultMaterial.gpuData.emissive = glm::vec3(0.0f);
-            defaultMaterial.gpuData.textureFlags = glm::ivec4(0);
-            dragonModel.addMaterial(defaultMaterial);
+            shipModel.addMesh(std::move(mesh));
+            shipModel.addMaterial(std::move(material));
         }
 
         // Add dragon to scene
-        defaultScene.addModel(std::move(dragonModel));
+        defaultScene.addModel(std::move(shipModel));
 
         // Add environment map to scene
         defaultScene.setEnvironmentMap(RESOURCE_ROOT "resources/envmap/pure_sky.hdr");

@@ -34,6 +34,9 @@ public:
 
     bool hasTextureCoords() const;
 
+    // Get the CPU mesh material
+    const Material& getMaterial() const { return m_material; }
+
     // Bind VAO and call glDrawElements.
     void draw(const Shader& drawingShader);
 
@@ -46,6 +49,7 @@ private:
 
     GLsizei m_numIndices { 0 };
     bool m_hasTextureCoords { false };
+    Material m_material;
     GLuint m_ibo { INVALID };
     GLuint m_vbo { INVALID };
     GLuint m_vao { INVALID };

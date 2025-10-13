@@ -1,11 +1,14 @@
 #pragma once
 #include <framework/disable_all_warnings.h>
+
+#include "framework/image.h"
 DISABLE_WARNINGS_PUSH()
 #include <glm/vec3.hpp>
 DISABLE_WARNINGS_POP()
 #include <exception>
 #include <filesystem>
 #include <framework/opengl_includes.h>
+
 
 struct ImageLoadingException : public std::runtime_error {
     using std::runtime_error::runtime_error;
@@ -14,6 +17,7 @@ struct ImageLoadingException : public std::runtime_error {
 class RS_Texture {
 public:
     RS_Texture(std::filesystem::path filePath, bool isHDR = false);
+    RS_Texture(const Image& image); // Create texture from framework
     RS_Texture(const RS_Texture&) = delete;
     RS_Texture(RS_Texture&&);
     ~RS_Texture();

@@ -98,7 +98,7 @@ void main()
     vec3 albedo = baseColor;
     if (useMaterial && hasTexCoords && textureFlags.x == 1)
     {
-        albedo *= texture(colorMap, fragTexCoord).rgb;
+        albedo = texture(colorMap, fragTexCoord).rgb;
     }
 
     // Fresnel reflectance at normal incidence

@@ -7,6 +7,7 @@ DISABLE_WARNINGS_POP()
 #include <vector>
 
 GPUMesh::GPUMesh(const Mesh& cpuMesh)
+    : m_material(cpuMesh.material)
 {
     // Figure out if this mesh has texture coordinates
     m_hasTextureCoords = static_cast<bool>(cpuMesh.material.kdTexture);
@@ -65,7 +66,7 @@ std::vector<GPUMesh> GPUMesh::loadMeshGPU(std::filesystem::path filePath, bool n
     // Generate GPU-side meshes for all sub-meshes
     std::vector<Mesh> subMeshes = loadMesh(filePath, { .normalizeVertexPositions = normalize });
     std::vector<GPUMesh> gpuMeshes;
-    for (const Mesh& mesh : subMeshes) { gpuMeshes.emplace_back(mesh); }
+    for (const Mesh& mesh : subMeshes) { gpuMeshes.emplace_back(mesh);}
     
     return gpuMeshes;
 }
@@ -87,6 +88,7 @@ void GPUMesh::moveInto(GPUMesh&& other)
     freeGpuMemory();
     m_numIndices = other.m_numIndices;
     m_hasTextureCoords = other.m_hasTextureCoords;
+    m_material = std::move(other.m_material);
     m_ibo = other.m_ibo;
     m_vbo = other.m_vbo;
     m_vao = other.m_vao;
