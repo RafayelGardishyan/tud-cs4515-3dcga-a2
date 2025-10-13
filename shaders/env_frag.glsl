@@ -22,33 +22,56 @@ layout(location = 0) out vec4 fragColor;
 
 const float PI = 3.1415926;
 
+const float environmentIntensity = 1.0;
+
+vec3 textureSample(samplerCube map, vec3 dir, float roughness, float spreadFactor)
+{
+    vec3 accumulatedColor = vec3(0.0);
+    float totalWeight = 0.0;
+
+    for (int i = 0; i < 16; ++i)
+    {
+        // Sample texture around the direction, with a spread based on roughness
+        float radius = max(exp(roughness * spreadFactor), 1.0);
+        float theta = acos(1.0 - 2.0 * (float(i) + 0.5) / 16.0);
+        float phi = PI * (1.0 + sqrt(5.0)) * float(i);
+        vec3 sampleDir = normalize(dir + radius * vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta)));
+
+        float weight = max(dot(dir, sampleDir), 0.0);
+        accumulatedColor += texture(environmentMap, sampleDir).rgb * weight;
+        totalWeight += weight;
+    }
+
+    return accumulatedColor / totalWeight;
+}
+
 void main()
 {
     vec3 N = normalize(fragNormal);
     vec3 V = normalize(cameraPosition - fragPosition);
     vec3 R = reflect(-V, N);
 
-    // Sample cubemap
-    vec3 specColor = texture(environmentMap, R).rgb;
-    vec3 diffuseEnv = texture(environmentMap, N).rgb;
+    vec3 diffuseEnv = textureSample(environmentMap, N, roughness, 5).rgb;
 
-    // Fresnel for metallic surfaces
     float NdotV = max(dot(N, V), 0.0);
     float ior = 1.5;
-    float f0 = pow((1.0 - ior) / (1.0 + ior), 2.0);
-    vec3 F0 = mix(vec3(f0), baseColor, metallic);
-    vec3 F = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0); // Schlick approximation
+    float f0_dielectric = pow((1.0 - ior) / (1.0 + ior), 2.0); // ~0.04 for ior=1.5
+    vec3 F0 = mix(vec3(f0_dielectric), baseColor, metallic); // mix baseColor for metals
+    vec3 F = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0); // Schlick
 
-    vec3 kD = (1.0 - F) * (1.0 - metallic);
-    vec3 envDiffuse = diffuseEnv * baseColor * kD * envBrightness;
+    vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
 
-    vec3 envSpecular = specColor * F * envBrightness;
+    vec3 specEnv = textureSample(environmentMap, R, roughness, roughness * 5).rgb;
+
+    vec3 envDiffuse  = diffuseEnv * baseColor * kD * envBrightness * (1.0 / PI);
+    vec3 envSpecular = specEnv * F * envBrightness;
 
     vec3 color = envDiffuse + envSpecular;
 
-    // Tone mapping (Reinhard)
+    // tone mapping (Reinhard) + gamma
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
+    color *= environmentIntensity;
 
     fragColor = vec4(color, 1.0);
 }

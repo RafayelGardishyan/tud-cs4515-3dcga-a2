@@ -97,6 +97,9 @@ RS_Texture::RS_Texture(std::filesystem::path filePath, bool isHDR)
         }
     }
 
+    // Generate mipmaps
+    glGenerateMipmap(GL_TEXTURE_2D);
+
     // Free image data
     stbi_image_free(data);
 
@@ -157,4 +160,6 @@ void RS_Texture::setEnvironmentMapWrapping()
     // Use trilinear filtering with mipmaps for proper LOD sampling
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // Regenerate mipmaps after changing parameters
+    glGenerateMipmap(GL_TEXTURE_2D);
 }
