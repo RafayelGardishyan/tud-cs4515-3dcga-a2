@@ -34,6 +34,21 @@ RS_Material RS_Material::createFromMesh(const GPUMesh& mesh)
         }
     }
 
+    if (cpuMaterial.norTexture)
+    {
+        try
+        {
+            material.normalTex = std::make_unique<RS_Texture>(*cpuMaterial.norTexture);
+            material.gpuData.textureFlags += RS_HAS_NORMAL_TEX;
+            std::cout << "Loaded normal texture from mesh material" << std::endl;
+        } catch (const std::exception& e)
+        {
+            std::cerr << "Failed to load normal color texture: " << e.what() << std::endl;
+        }
+    }
+
+    std::cout << material.gpuData.textureFlags.y << std::endl;
+
     return material;
 }
 
@@ -75,6 +90,16 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
             if (texLoc != -1)
             {
                 glUniform1i(texLoc, 1);
+            }
+        }
+
+        if (material.normalTex)
+        {
+            material.normalTex->bind(GL_TEXTURE2);
+            GLint texLoc = drawShader.getUniformLocation("normalMap");
+            if (texLoc != 1)
+            {
+                glUniform1i(texLoc, 2);
             }
         }
 

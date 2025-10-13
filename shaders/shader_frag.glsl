@@ -12,6 +12,7 @@ layout(std140) uniform Material// Must match RS_GPUMaterial in src/model.h
 };
 
 uniform sampler2D colorMap;
+uniform sampler2D normalMap;
 uniform bool hasTexCoords;
 uniform bool useMaterial;
 
@@ -24,6 +25,7 @@ uniform float lightIntensity;
 in vec3 fragPosition;
 in vec3 fragNormal;
 in vec2 fragTexCoord;
+in mat3 TBN;
 
 layout(location = 0) out vec4 fragColor;
 
@@ -84,6 +86,19 @@ void main()
     // f_r = kd * f_lambert + ks * f_cook_torrance
 
     vec3 N = normalize(fragNormal);
+    // Normal mapping
+    if (useMaterial && hasTexCoords && textureFlags.y == 1)
+    {
+        vec3 normalSample = texture(normalMap, fragTexCoord).rgb;
+        normalSample = normalSample * 2.0 - 1.0; // Transform from [0,1] to [-1,1]
+        normalSample.y = -normalSample.y; // Invert Y for OpenGL
+        normalSample = normalize(normalSample);
+        N = normalize(TBN * normalSample);
+    }
+
+    fragColor = vec4(N * 0.5 + 0.5, 1.0); // Visualize normals
+    return;
+
     vec3 V = normalize(cameraPosition - fragPosition);
     vec3 L = normalize(lightPosition - fragPosition);
     vec3 H = normalize(V + L);

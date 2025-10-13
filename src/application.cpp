@@ -133,7 +133,7 @@ public:
 
         // Add default light to the scene
         RS_Light defaultLight;
-        defaultLight.position = glm::vec3(0.0f, 2.0f, 2.0f);
+        defaultLight.position = glm::vec3(10.0f, 10.0f, 0.0f);
         defaultLight.color = glm::vec3(1.0f, 1.0f, 1.0f);
         defaultLight.intensity = 1.0f;
         defaultScene.addLight(defaultLight);
@@ -143,7 +143,7 @@ public:
 
         // Load dragon model
         RS_Model shipModel;
-        std::vector<GPUMesh> shipMeshes = GPUMesh::loadMeshGPU(RESOURCE_ROOT "resources/toolbox/metal_tool_chest_2k.obj", true);
+        std::vector<GPUMesh> shipMeshes = GPUMesh::loadMeshGPU(RESOURCE_ROOT "resources/ship/ship.obj", true);
 
         // Add all meshes to the model
         for (GPUMesh& mesh : shipMeshes) {

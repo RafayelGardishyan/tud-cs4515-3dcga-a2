@@ -31,6 +31,7 @@ struct Material {
 	//   material.kdTexture->getTexel(...);
 	// }
 	std::shared_ptr<Image> kdTexture;
+	std::shared_ptr<Image> norTexture;
 };
 
 struct Mesh {
