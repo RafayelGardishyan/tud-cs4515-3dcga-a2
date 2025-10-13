@@ -14,16 +14,25 @@
 #include "framework/trackball.h"
 #include "framework/shader.h"
 
+struct RS_RenderSettings
+{
+    bool enableColorTextures = true;
+    bool enableNormalTextures = true;
+    bool enableMetallicTextures = true;
+    bool enableToneMapping = true;
+    bool enableGammaCorrection = true;
+};
+
 class RS_Scene
 {
 public:
     RS_Scene() = default;
 
     // Draw the entire scene
-    void draw(const Shader& drawShader);
+    void draw(const Shader& drawShader, RS_RenderSettings settings);
 
     // Draw environment map contribution
-    void drawEnvironment(const Shader& envShader);
+    void drawEnvironment(const Shader& envShader, RS_RenderSettings settings);
 
     // Draw skybox background
     void drawSkybox(const Shader& skyboxShader, GLuint skyboxVAO);

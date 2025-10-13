@@ -11,6 +11,7 @@ layout(location = 2) in vec2 texCoord;
 out vec3 fragPosition;
 out vec3 fragNormal;
 out vec2 fragTexCoord;
+out mat3 TBN;
 
 void main()
 {
@@ -19,4 +20,9 @@ void main()
     fragPosition = (modelMatrix * vec4(position, 1)).xyz;
     fragNormal = normalModelMatrix * normal;
     fragTexCoord = texCoord;
+
+    vec3 T = normalize(vec3(modelMatrix[0])); // Tangent
+    vec3 B = normalize(vec3(modelMatrix[1])); // Bitangent
+    vec3 N = normalize(normalModelMatrix * normal); // Normal
+    TBN = mat3(T, B, N);
 }

@@ -35,8 +35,8 @@ struct RS_Material
 
     std::unique_ptr<RS_Texture> baseColorTex = nullptr;
     std::unique_ptr<RS_Texture> normalTex = nullptr;
-    std::unique_ptr<RS_Texture> metallicRoughnessTex = nullptr;
-    std::unique_ptr<RS_Texture> emissiveTex = nullptr;
+    std::unique_ptr<RS_Texture> metallicTex = nullptr;
+    std::unique_ptr<RS_Texture> roughnessTex = nullptr;
 
     // Helper function to create material from framework mesh material
     static RS_Material createFromMesh(const GPUMesh& mesh);

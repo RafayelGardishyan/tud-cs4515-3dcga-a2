@@ -47,6 +47,33 @@ RS_Material RS_Material::createFromMesh(const GPUMesh& mesh)
         }
     }
 
+    // Load metallic texture
+    if (cpuMaterial.metTexture)
+    {
+        try
+        {
+            material.metallicTex = std::make_unique<RS_Texture>(*cpuMaterial.metTexture);
+            material.gpuData.textureFlags += RS_HAS_METALLIC_ROUGHNESS_TEX;
+            std::cout << "Loaded metallic texture from mesh material" << std::endl;
+        } catch (const std::exception& e)
+        {
+            std::cerr << "Failed to load metallic texture: " << e.what() << std::endl;
+        }
+    }
+
+    // Load roughness texture
+    if (cpuMaterial.roughTexture)
+    {
+        try
+        {
+            material.roughnessTex = std::make_unique<RS_Texture>(*cpuMaterial.roughTexture);
+            std::cout << "Loaded roughness texture from mesh material" << std::endl;
+        } catch (const std::exception& e)
+        {
+            std::cerr << "Failed to load roughness texture: " << e.what() << std::endl;
+        }
+    }
+
     std::cout << material.gpuData.textureFlags.y << std::endl;
 
     return material;
@@ -97,9 +124,29 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
         {
             material.normalTex->bind(GL_TEXTURE2);
             GLint texLoc = drawShader.getUniformLocation("normalMap");
-            if (texLoc != 1)
+            if (texLoc != -1)
             {
                 glUniform1i(texLoc, 2);
+            }
+        }
+
+        if (material.metallicTex)
+        {
+            material.metallicTex->bind(GL_TEXTURE3);
+            GLint texLoc = drawShader.getUniformLocation("metallicMap");
+            if (texLoc != -1)
+            {
+                glUniform1i(texLoc, 3);
+            }
+        }
+
+        if (material.roughnessTex)
+        {
+            material.roughnessTex->bind(GL_TEXTURE4);
+            GLint texLoc = drawShader.getUniformLocation("roughnessMap");
+            if (texLoc != -1)
+            {
+                glUniform1i(texLoc, 4);
             }
         }
 

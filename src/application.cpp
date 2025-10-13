@@ -133,7 +133,7 @@ public:
 
         // Add default light to the scene
         RS_Light defaultLight;
-        defaultLight.position = glm::vec3(10.0f, 10.0f, 0.0f);
+        defaultLight.position = glm::vec3(0.0f, 10.0f, 10.0f);
         defaultLight.color = glm::vec3(1.0f, 1.0f, 1.0f);
         defaultLight.intensity = 1.0f;
         defaultScene.addLight(defaultLight);
@@ -172,7 +172,7 @@ public:
 
         RS_Scene& activeScene = m_scenes[m_activeSceneIndex];
 
-        ImGui::Begin("Window");
+        ImGui::Begin(RS_WINDOW_TITLE);
 
         // Scene controls
         ImGui::Separator();
@@ -251,6 +251,18 @@ public:
         } else {
             ImGui::TextDisabled("No environment map loaded");
         }
+
+        // Global Texture Toggles
+        ImGui::Separator();
+        ImGui::Text("Global Texture Toggles");
+        ImGui::Checkbox("Enable Color Textures", &m_settings.enableColorTextures);
+        ImGui::Checkbox("Enable Normal Textures", &m_settings.enableNormalTextures);
+        ImGui::Checkbox("Enable Metallic Textures", &m_settings.enableMetallicTextures);
+
+        ImGui::Separator();
+        ImGui::Text("Color correction");
+        ImGui::Checkbox("Enable gamma correction", &m_settings.enableGammaCorrection);
+        ImGui::Checkbox("Enable tone mapping", &m_settings.enableToneMapping);
 
         // Model and Material controls
         ImGui::Separator();
@@ -361,10 +373,10 @@ public:
                 activeScene.drawSkybox(m_skyboxShader, m_skyboxVAO);
 
                 // Draw environment map
-                activeScene.drawEnvironment(m_envShader);
+                activeScene.drawEnvironment(m_envShader, m_settings);
 
                 // Draw direct lighting
-                activeScene.draw(m_defaultShader);
+                activeScene.draw(m_defaultShader, m_settings);
 
                 // Draw debug lights
                 draw_lights(activeScene);
@@ -434,6 +446,9 @@ private:
     size_t m_selectedLightIndex = 0;
 
     bool m_debug = true;
+
+    // Global texture toggles
+    RS_RenderSettings m_settings;
 
     // Scene system
     std::vector<RS_Scene> m_scenes;

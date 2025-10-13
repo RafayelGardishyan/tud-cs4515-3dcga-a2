@@ -9,7 +9,7 @@ DISABLE_WARNINGS_PUSH()
 #include <glm/gtc/type_ptr.hpp>
 DISABLE_WARNINGS_POP()
 
-void RS_Scene::draw(const Shader& drawShader)
+void RS_Scene::draw(const Shader& drawShader, RS_RenderSettings settings)
 {
     if (m_cameras.empty()) {
         // No camera to render from
@@ -24,6 +24,13 @@ void RS_Scene::draw(const Shader& drawShader)
     const glm::mat4 viewMatrix = camera.viewMatrix();
     const glm::mat4 projectionMatrix = camera.projectionMatrix();
     const glm::mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+
+    // Set global texture toggles
+    glUniform1i(drawShader.getUniformLocation("enableColorTextures"), settings.enableColorTextures ? 1 : 0);
+    glUniform1i(drawShader.getUniformLocation("enableNormalTextures"), settings.enableNormalTextures ? 1 : 0);
+    glUniform1i(drawShader.getUniformLocation("enableMetallicTextures"), settings.enableMetallicTextures ? 1 : 0);
+    glUniform1i(drawShader.getUniformLocation("enableGammaCorrection"), settings.enableGammaCorrection ? 1 : 0);
+    glUniform1i(drawShader.getUniformLocation("enableToneMapping"), settings.enableToneMapping ? 1 : 0);
 
     // Multi-pass lighting: render scene once for each light with additive blending
     for (size_t lightIndex = 0; lightIndex < m_lights.size(); lightIndex++) {
@@ -46,7 +53,7 @@ void RS_Scene::draw(const Shader& drawShader)
     glDepthFunc(GL_LESS);
 }
 
-void RS_Scene::drawEnvironment(const Shader& envShader)
+void RS_Scene::drawEnvironment(const Shader& envShader, RS_RenderSettings settings)
 {
     if (m_cameras.empty() || !m_environmentCubemap) {
         return;
@@ -59,6 +66,13 @@ void RS_Scene::drawEnvironment(const Shader& envShader)
     const glm::mat4 viewMatrix = camera.viewMatrix();
     const glm::mat4 projectionMatrix = camera.projectionMatrix();
     const glm::mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+
+    // Set global texture toggles
+    glUniform1i(envShader.getUniformLocation("enableColorTextures"), settings.enableColorTextures ? 1 : 0);
+    glUniform1i(envShader.getUniformLocation("enableNormalTextures"), settings.enableNormalTextures ? 1 : 0);
+    glUniform1i(envShader.getUniformLocation("enableMetallicTextures"), settings.enableMetallicTextures ? 1 : 0);
+    glUniform1i(envShader.getUniformLocation("enableGammaCorrection"), settings.enableGammaCorrection ? 1 : 0);
+    glUniform1i(envShader.getUniformLocation("enableToneMapping"), settings.enableToneMapping ? 1 : 0);
 
     glActiveTexture(GL_TEXTURE0);
     m_environmentCubemap->bind(GL_TEXTURE0);

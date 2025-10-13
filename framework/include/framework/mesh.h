@@ -32,6 +32,8 @@ struct Material {
 	// }
 	std::shared_ptr<Image> kdTexture;
 	std::shared_ptr<Image> norTexture;
+	std::shared_ptr<Image> metTexture;
+	std::shared_ptr<Image> roughTexture;
 };
 
 struct Mesh {

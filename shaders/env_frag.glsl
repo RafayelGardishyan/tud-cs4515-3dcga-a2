@@ -18,16 +18,28 @@ uniform float envBrightness;
 uniform bool useMaterial;
 uniform bool hasTexCoords;
 uniform sampler2D colorMap;
+uniform sampler2D normalMap;
+uniform sampler2D metallicMap;
+uniform sampler2D roughnessMap;
+
+// Global texture toggles
+uniform bool enableColorTextures;
+uniform bool enableNormalTextures;
+uniform bool enableMetallicTextures;
+
+uniform bool enableGammaCorrection;
+uniform bool enableToneMapping;
 
 in vec3 fragPosition;
 in vec3 fragNormal;
 in vec2 fragTexCoord;
+in mat3 TBN;
 
 layout(location = 0) out vec4 fragColor;
 
 const float PI = 3.1415926;
 
-const float environmentIntensity = .3;
+const float environmentIntensity = 0.3;
 
 vec3 textureSample(samplerCube map, vec3 dir, float roughness, float spreadFactor)
 {
@@ -53,27 +65,49 @@ vec3 textureSample(samplerCube map, vec3 dir, float roughness, float spreadFacto
 void main()
 {
     vec3 N = normalize(fragNormal);
+    // Normal mapping
+    if (useMaterial && hasTexCoords && textureFlags.y == 1 && enableNormalTextures)
+    {
+        vec3 normalSample = texture(normalMap, fragTexCoord).rgb;
+        normalSample = normalSample * 2.0 - 1.0;// Transform from [0,1] to [-1,1]
+        normalSample.y = -normalSample.y;// Invert Y for OpenGL
+        normalSample = normalize(normalSample);
+        N = normalize(TBN * normalSample);
+    }
+
     vec3 V = normalize(cameraPosition - fragPosition);
     vec3 R = reflect(-V, N);
 
-    vec3 diffuseEnv = textureSample(environmentMap, N, roughness, 5).rgb;
-
+    // Base color (albedo)
     vec3 albedo = baseColor;
-    if (useMaterial && hasTexCoords && textureFlags.x == 1)
+    if (useMaterial && hasTexCoords && textureFlags.x == 1 && enableColorTextures)
     {
         albedo = texture(colorMap, fragTexCoord).rgb;
     }
 
+    float m_metallic = metallic;
+    float m_roughness = roughness;
+
+    if (useMaterial && hasTexCoords && textureFlags.z == 1 && enableMetallicTextures)
+    {
+        // Sample metallic and roughness from separate textures (R channel of each)
+        m_metallic = texture(metallicMap, fragTexCoord).r;
+        m_roughness = texture(roughnessMap, fragTexCoord).r;
+    }
+
+    m_roughness = clamp(m_roughness, 0.05, 1.0);// Avoid 0 roughness
+
+    vec3 diffuseEnv = textureSample(environmentMap, N, m_roughness, 5).rgb;
 
     float NdotV = max(dot(N, V), 0.0);
     float ior = 1.5;
-    float f0_dielectric = pow((1.0 - ior) / (1.0 + ior), 2.0); // ~0.04 for ior=1.5
-    vec3 F0 = mix(vec3(f0_dielectric), albedo, metallic); // mix baseColor for metals
-    vec3 F = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0); // Schlick
+    float f0_dielectric = pow((1.0 - ior) / (1.0 + ior), 2.0);// ~0.04 for ior=1.5
+    vec3 F0 = mix(vec3(f0_dielectric), albedo, m_metallic);// mix baseColor for metals
+    vec3 F = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0);// Schlick
 
-    vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+    vec3 kD = (vec3(1.0) - F) * (1.0 - m_metallic);
 
-    vec3 specEnv = textureSample(environmentMap, R, roughness, roughness * 5).rgb;
+    vec3 specEnv = textureSample(environmentMap, R, m_roughness, m_roughness * 5).rgb;
 
     vec3 envDiffuse  = diffuseEnv * albedo * kD * envBrightness * (1.0 / PI);
     vec3 envSpecular = specEnv * F * envBrightness;
@@ -81,8 +115,12 @@ void main()
     vec3 color = envDiffuse + envSpecular;
 
     // tone mapping (Reinhard) + gamma
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2));
+    if (enableToneMapping)
+        color = color / (color + vec3(1.0));
+
+    if (enableGammaCorrection)
+        color = pow(color, vec3(1.0/2.2));
+
     color *= environmentIntensity;
 
     fragColor = vec4(color, 1.0);

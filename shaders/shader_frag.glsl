@@ -13,8 +13,18 @@ layout(std140) uniform Material// Must match RS_GPUMaterial in src/model.h
 
 uniform sampler2D colorMap;
 uniform sampler2D normalMap;
+uniform sampler2D metallicMap;
+uniform sampler2D roughnessMap;
 uniform bool hasTexCoords;
 uniform bool useMaterial;
+
+// Global texture toggles
+uniform bool enableColorTextures;
+uniform bool enableNormalTextures;
+uniform bool enableMetallicTextures;
+
+uniform bool enableGammaCorrection;
+uniform bool enableToneMapping;
 
 uniform vec3 cameraPosition;
 
@@ -87,7 +97,7 @@ void main()
 
     vec3 N = normalize(fragNormal);
     // Normal mapping
-    if (useMaterial && hasTexCoords && textureFlags.y == 1)
+    if (useMaterial && hasTexCoords && textureFlags.y == 1 && enableNormalTextures)
     {
         vec3 normalSample = texture(normalMap, fragTexCoord).rgb;
         normalSample = normalSample * 2.0 - 1.0; // Transform from [0,1] to [-1,1]
@@ -95,9 +105,6 @@ void main()
         normalSample = normalize(normalSample);
         N = normalize(TBN * normalSample);
     }
-
-    fragColor = vec4(N * 0.5 + 0.5, 1.0); // Visualize normals
-    return;
 
     vec3 V = normalize(cameraPosition - fragPosition);
     vec3 L = normalize(lightPosition - fragPosition);
@@ -111,18 +118,30 @@ void main()
 
     // Base color (albedo)
     vec3 albedo = baseColor;
-    if (useMaterial && hasTexCoords && textureFlags.x == 1)
+    if (useMaterial && hasTexCoords && textureFlags.x == 1 && enableColorTextures)
     {
         albedo = texture(colorMap, fragTexCoord).rgb;
     }
 
+    float m_metallic = metallic;
+    float m_roughness = roughness;
+
+    if (useMaterial && hasTexCoords && textureFlags.z == 1 && enableMetallicTextures)
+    {
+        // Sample metallic and roughness from separate textures (R channel of each)
+        m_metallic = texture(metallicMap, fragTexCoord).r;
+        m_roughness = texture(roughnessMap, fragTexCoord).r;
+    }
+
+    m_roughness = clamp(m_roughness, 0.05, 1.0); // Avoid 0 roughness
+
     // Fresnel reflectance at normal incidence
     float ior = 1.5;
     float f0 = pow((1.0 - ior) / (1.0 + ior), 2.0);
-    vec3 F0 = mix(vec3(f0), albedo, metallic);
+    vec3 F0 = mix(vec3(f0), albedo, m_metallic);
 
     // Cook-Torrance specular term
-    float a = roughness * roughness;
+    float a = m_roughness * m_roughness;
 
     // D: GGX distribution
     float D = D_GGX(N, H, a);
@@ -131,7 +150,7 @@ void main()
     vec3 F = F_Schlick(VdotH, F0);
 
     // G: Geometry term (Smith's method)
-    float G = G_GGX_Partial(NdotV, roughness) * G_GGX_Partial(NdotL, roughness);
+    float G = G_GGX_Partial(NdotV, m_roughness) * G_GGX_Partial(NdotL, m_roughness);
 
     // Cook-Torrance specular BRDF
     vec3 numerator = D * F * G;
@@ -139,7 +158,7 @@ void main()
     vec3 specular = numerator / denominator;
 
     // Lambertian diffuse BRDF
-    vec3 kD = (vec3(1.0) - F) * (1.0 - metallic); // Energy conservation
+    vec3 kD = (vec3(1.0) - F) * (1.0 - m_metallic); // Energy conservation
     vec3 diffuse = kD * albedo / PI;
 
     // Combine with light contribution (rendering equation)
@@ -150,9 +169,11 @@ void main()
     color += emissive;
 
     // Tone mapping
-    color = color / (color + vec3(1.0));
+    if (enableToneMapping)
+        color = color / (color + vec3(1.0));
 
-    color = pow(color, vec3(1.0/2.2));
+    if (enableGammaCorrection)
+        color = pow(color, vec3(1.0/2.2));
 
     fragColor = vec4(color, 1.0);
 }
