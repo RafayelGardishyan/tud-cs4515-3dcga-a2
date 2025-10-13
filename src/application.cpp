@@ -131,19 +131,19 @@ public:
         // Create default scene
         RS_Scene defaultScene;
 
-        // // Add default light to the scene
-        // RS_Light defaultLight;
-        // defaultLight.position = glm::vec3(0.0f, 2.0f, 0.0f);
-        // defaultLight.color = glm::vec3(1.0f, 1.0f, 1.0f);
-        // defaultLight.intensity = 1.0f;
-        // defaultScene.addLight(defaultLight);
+        // Add default light to the scene
+        RS_Light defaultLight;
+        defaultLight.position = glm::vec3(0.0f, 2.0f, 2.0f);
+        defaultLight.color = glm::vec3(1.0f, 1.0f, 1.0f);
+        defaultLight.intensity = 1.0f;
+        defaultScene.addLight(defaultLight);
 
         // Add default camera to the scene
         defaultScene.addCamera(std::make_unique<Trackball>(&m_window, glm::radians(80.0f), 4.0f));
 
         // Load dragon model
         RS_Model shipModel;
-        std::vector<GPUMesh> shipMeshes = GPUMesh::loadMeshGPU(RESOURCE_ROOT "resources/ship/ship.obj", true);
+        std::vector<GPUMesh> shipMeshes = GPUMesh::loadMeshGPU(RESOURCE_ROOT "resources/toolbox/metal_tool_chest_2k.obj", true);
 
         // Add all meshes to the model
         for (GPUMesh& mesh : shipMeshes) {

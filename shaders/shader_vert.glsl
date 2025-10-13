@@ -20,5 +20,5 @@ void main()
     
     fragPosition    = (modelMatrix * vec4(position, 1)).xyz;
     fragNormal      = normalModelMatrix * normal;
-    fragTexCoord    = texCoord;
+    fragTexCoord    = vec2(texCoord.x, 1.0 - texCoord.y);
 }
