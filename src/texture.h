@@ -18,6 +18,9 @@ class RS_Texture {
 public:
     RS_Texture(std::filesystem::path filePath, bool isHDR = false);
     RS_Texture(const Image& image); // Create texture from framework
+    // Create empty depth texture for shadow mapping
+    static RS_Texture createDepthTexture(int width, int height);
+
     RS_Texture(const RS_Texture&) = delete;
     RS_Texture(RS_Texture&&);
     ~RS_Texture();
@@ -34,8 +37,12 @@ public:
     int getHeight() const { return m_height; }
     int getChannels() const { return m_channels; }
     bool isHDR() const { return m_isHDR; }
+    GLuint getTextureID() const { return m_texture; }
 
 private:
+    // Private constructor for creating empty textures
+    RS_Texture(int width, int height, bool isDepth);
+
     static constexpr GLuint INVALID = 0xFFFFFFFF;
     GLuint m_texture { INVALID };
     int m_width { 0 };

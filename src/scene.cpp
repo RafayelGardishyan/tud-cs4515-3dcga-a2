@@ -40,9 +40,9 @@ void RS_Scene::draw(const Shader& drawShader, RS_RenderSettings settings)
         glDepthFunc(GL_EQUAL);
 
         glUniform3fv(drawShader.getUniformLocation("cameraPosition"), 1, glm::value_ptr(camera.position()));
-        glUniform3fv(drawShader.getUniformLocation("lightPosition"), 1, glm::value_ptr(m_lights[lightIndex].position));
-        glUniform3fv(drawShader.getUniformLocation("lightColor"), 1, glm::value_ptr(m_lights[lightIndex].color));
-        glUniform1f(drawShader.getUniformLocation("lightIntensity"), m_lights[lightIndex].intensity);
+        glUniform3fv(drawShader.getUniformLocation("lightPosition"), 1, glm::value_ptr(m_lights[lightIndex].m_position));
+        glUniform3fv(drawShader.getUniformLocation("lightColor"), 1, glm::value_ptr(m_lights[lightIndex].m_color));
+        glUniform1f(drawShader.getUniformLocation("lightIntensity"), m_lights[lightIndex].m_intensity);
 
         for (RS_Model& model : m_models) {
             model.draw(drawShader, viewProjectionMatrix);

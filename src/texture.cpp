@@ -152,6 +152,31 @@ RS_Texture::RS_Texture(const Image& image)
               << " (" << m_width << "x" << m_height << ", " << m_channels << " channels)" << std::endl;
 }
 
+// Private constructor for creating empty textures
+RS_Texture::RS_Texture(int width, int height, bool isDepth)
+    : m_width(width)
+    , m_height(height)
+    , m_channels(1)
+    , m_isHDR(false)
+{
+    glGenTextures(1, &m_texture);
+    glBindTexture(GL_TEXTURE_2D, m_texture);
+
+    if (isDepth) {
+        // Create depth texture for shadow mapping
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, m_width, m_height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    }
+}
+
+RS_Texture RS_Texture::createDepthTexture(int width, int height)
+{
+    return RS_Texture(width, height, true);
+}
+
 RS_Texture::RS_Texture(RS_Texture&& other)
     : m_texture(other.m_texture)
     , m_width(other.m_width)

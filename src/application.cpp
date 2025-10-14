@@ -133,9 +133,9 @@ public:
 
         // Add default light to the scene
         RS_Light defaultLight;
-        defaultLight.position = glm::vec3(0.0f, 10.0f, 10.0f);
-        defaultLight.color = glm::vec3(1.0f, 1.0f, 1.0f);
-        defaultLight.intensity = 1.0f;
+        defaultLight.m_position = glm::vec3(0.0f, 10.0f, 10.0f);
+        defaultLight.m_color = glm::vec3(1.0f, 1.0f, 1.0f);
+        defaultLight.m_intensity = 1.0f;
         defaultScene.addLight(defaultLight);
 
         // Add default camera to the scene
@@ -230,16 +230,16 @@ public:
 
         if (ImGui::Button("Add Light")) {
             RS_Light newLight;
-            newLight.position = glm::vec3(0.0f, 2.0f, 0.0f);
-            newLight.color = glm::vec3(1.0f, 1.0f, 1.0f);
-            newLight.intensity = 1.0f;
+            newLight.m_position = glm::vec3(0.0f, 2.0f, 0.0f);
+            newLight.m_color = glm::vec3(1.0f, 1.0f, 1.0f);
+            newLight.m_intensity = 1.0f;
             activeScene.addLight(newLight);
         }
         if (!lights.empty()) {
             RS_Light& selectedLight = lights[m_selectedLightIndex];
-            ImGui::DragFloat3("Position", glm::value_ptr(selectedLight.position), 0.1f);
-            ImGui::ColorEdit3("Color", glm::value_ptr(selectedLight.color));
-            ImGui::DragFloat("Intensity", &selectedLight.intensity, 0.1f, 0.0f, 100.0f);
+            ImGui::DragFloat3("Position", glm::value_ptr(selectedLight.m_position), 0.1f);
+            ImGui::ColorEdit3("Color", glm::value_ptr(selectedLight.m_color));
+            ImGui::DragFloat("Intensity", &selectedLight.m_intensity, 0.1f, 0.0f, 100.0f);
         }
 
         // Environment Map controls
@@ -325,7 +325,7 @@ public:
             // Render selected light with yellow color and larger size
             {
                 const std::vector<RS_Light>& lights = activeScene.getLights();
-                const glm::vec4 screenPos = viewProjectionMatrix * glm::vec4(lights[m_selectedLightIndex].position, 1.0f);
+                const glm::vec4 screenPos = viewProjectionMatrix * glm::vec4(lights[m_selectedLightIndex].m_position, 1.0f);
                 const glm::vec3 color{1, 1, 0};
 
                 glPointSize(40.0f);
@@ -338,11 +338,11 @@ public:
 
             // Render all lights with their colors
             for (const RS_Light& light : activeScene.getLights()) {
-                const glm::vec4 screenPos = viewProjectionMatrix * glm::vec4(light.position, 1.0f);
+                const glm::vec4 screenPos = viewProjectionMatrix * glm::vec4(light.m_position, 1.0f);
 
                 glPointSize(10.0f);
                 glUniform4fv(m_lightShader.getUniformLocation("pos"), 1, glm::value_ptr(screenPos));
-                glUniform3fv(m_lightShader.getUniformLocation("color"), 1, glm::value_ptr(light.color));
+                glUniform3fv(m_lightShader.getUniformLocation("color"), 1, glm::value_ptr(light.m_color));
                 glBindVertexArray(m_lightVAO);
                 glDrawArrays(GL_POINTS, 0, 1);
                 glBindVertexArray(0);

@@ -37,6 +37,34 @@ RS_Cubemap::RS_Cubemap(const RS_Texture& equirectTexture, int resolution)
     std::cout << "Created cubemap with resolution: " << m_resolution << "x" << m_resolution << std::endl;
 }
 
+// Private constructor for creating empty cubemaps
+RS_Cubemap::RS_Cubemap(int resolution, bool isDepth)
+    : m_resolution(resolution)
+{
+    glGenTextures(1, &m_cubemap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, m_cubemap);
+
+    for (unsigned int i = 0; i < 6; i++) {
+        if (isDepth) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT,
+                         m_resolution, m_resolution, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        }
+    }
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_MODE, GL_NONE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+}
+
+RS_Cubemap RS_Cubemap::createDepthCubemap(int resolution)
+{
+    return RS_Cubemap(resolution, true);
+}
+
 void RS_Cubemap::convertEquirectToCubemap(const RS_Texture& equirectTexture)
 {
     // Save current viewport

@@ -16,6 +16,8 @@ class RS_Cubemap {
 public:
     // Create a cubemap from an equirectangular HDR texture
     RS_Cubemap(const RS_Texture& equirectTexture, int resolution = 512);
+    // Create empty depth cubemap for shadow mapping
+    static RS_Cubemap createDepthCubemap(int resolution);
 
     RS_Cubemap(const RS_Cubemap&) = delete;
     RS_Cubemap(RS_Cubemap&&);
@@ -27,8 +29,12 @@ public:
     void bind(GLint textureSlot);
 
     int getResolution() const { return m_resolution; }
+    GLuint getCubemapID() const { return m_cubemap; }
 
 private:
+    // Private constructor for creating empty cubemaps
+    RS_Cubemap(int resolution, bool isDepth);
+
     static constexpr GLuint INVALID = 0xFFFFFFFF;
     GLuint m_cubemap { INVALID };
     int m_resolution { 512 };
