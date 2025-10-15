@@ -49,14 +49,14 @@ public:
     const Trackball& getActiveCamera() const { return *m_cameras[m_activeCameraIndex]; }
     std::vector<std::unique_ptr<Trackball>>& getCameras() { return m_cameras; }
     const std::vector<std::unique_ptr<Trackball>>& getCameras() const { return m_cameras; }
-    int getActiveCameraIndex() const { return m_activeCameraIndex; }
-    void setActiveCameraIndex(int index) { m_activeCameraIndex = index; }
+    size_t getActiveCameraIndex() const { return m_activeCameraIndex; }
+    void setActiveCameraIndex(size_t index) { m_activeCameraIndex = index; }
     void addCamera(std::unique_ptr<Trackball> camera) { m_cameras.push_back(std::move(camera)); }
 
     // Light management
     std::vector<RS_Light>& getLights() { return m_lights; }
     const std::vector<RS_Light>& getLights() const { return m_lights; }
-    void addLight(const RS_Light& light) { m_lights.push_back(light); }
+    void addLight(RS_Light&& light) { m_lights.push_back(std::move(light)); }
 
     // Model management
     std::vector<RS_Model>& getModels() { return m_models; }
@@ -94,7 +94,7 @@ private:
 
     // Cameras
     std::vector<std::unique_ptr<Trackball>> m_cameras;
-    int m_activeCameraIndex { 0 };
+    size_t m_activeCameraIndex { 0 };
 };
 
 

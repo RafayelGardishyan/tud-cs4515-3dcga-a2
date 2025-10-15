@@ -136,7 +136,7 @@ public:
         defaultLight.m_position = glm::vec3(0.0f, 10.0f, 10.0f);
         defaultLight.m_color = glm::vec3(1.0f, 1.0f, 1.0f);
         defaultLight.m_intensity = 1.0f;
-        defaultScene.addLight(defaultLight);
+        defaultScene.addLight(std::move(defaultLight));
 
         // Add default camera to the scene
         defaultScene.addCamera(std::make_unique<Trackball>(&m_window, glm::radians(80.0f), 4.0f));
@@ -177,7 +177,7 @@ public:
         // Scene controls
         ImGui::Separator();
         ImGui::Text("Scenes");
-        ImGui::Text("Active Scene: %d / %zu", m_activeSceneIndex + 1, m_scenes.size());
+        ImGui::Text("Active Scene: %zu / %zu", m_activeSceneIndex + 1, m_scenes.size());
         if (ImGui::Button("Previous Scene") && m_activeSceneIndex > 0) {
             m_activeSceneIndex--;
         }
@@ -189,16 +189,16 @@ public:
         // Camera controls
         ImGui::Separator();
         ImGui::Text("Cameras");
-        int activeCameraIndex = activeScene.getActiveCameraIndex();
+        size_t activeCameraIndex = activeScene.getActiveCameraIndex();
         size_t cameraCount = activeScene.getCameras().size();
-        ImGui::Text("Active Camera: %d / %zu", activeCameraIndex + 1, cameraCount);
+        ImGui::Text("Active Camera: %zu / %zu", activeCameraIndex + 1, cameraCount);
 
         if (ImGui::BeginListBox("##cameras", ImVec2(-FLT_MIN, 4 * ImGui::GetTextLineHeightWithSpacing())))
         {
             for (size_t i = 0; i < cameraCount; i++) {
-                const bool isSelected = (i == static_cast<size_t>(activeCameraIndex));
+                const bool isSelected = (i == activeCameraIndex);
                 if (ImGui::Selectable(("Camera " + std::to_string(i + 1)).c_str(), isSelected)) {
-                    activeCameraIndex = static_cast<int>(i);
+                    activeCameraIndex = i;
                     activeScene.setActiveCameraIndex(activeCameraIndex);
                 }
                 if (isSelected) {
@@ -233,7 +233,7 @@ public:
             newLight.m_position = glm::vec3(0.0f, 2.0f, 0.0f);
             newLight.m_color = glm::vec3(1.0f, 1.0f, 1.0f);
             newLight.m_intensity = 1.0f;
-            activeScene.addLight(newLight);
+            activeScene.addLight(std::move(newLight));
         }
         if (!lights.empty()) {
             RS_Light& selectedLight = lights[m_selectedLightIndex];
