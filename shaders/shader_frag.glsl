@@ -101,7 +101,6 @@ void main()
     {
         vec3 normalSample = texture(normalMap, fragTexCoord).rgb;
         normalSample = normalSample * 2.0 - 1.0; // Transform from [0,1] to [-1,1]
-        normalSample.y = -normalSample.y; // Invert Y for OpenGL
         normalSample = normalize(normalSample);
         N = normalize(TBN * normalSample);
     }
