@@ -51,17 +51,23 @@ public:
     void draw(const Shader& drawShader, const glm::mat4& viewProjectionMatrix);
     void addMesh(GPUMesh&& mesh);
     void addMaterial(RS_Material&& material);
+    void setAnimationCurve(const std::vector<glm::vec3>& curvePoints) { m_animateCurvePoints = curvePoints; }
+    float m_animateTime{ 5.0f };
 
     // Getters for ImGui editing
     std::vector<RS_Material>& getMaterials() { return m_materials; }
     const std::vector<RS_Material>& getMaterials() const { return m_materials; }
     size_t getMeshCount() const { return m_meshes.size(); }
+	bool getAnimationEnabled() const { return m_animationEnabled; }
+	void enableAnimation(bool enable) { m_animationEnabled = enable; }
 
 private:
     std::vector<GPUMesh> m_meshes;
     std::vector<RS_Material> m_materials;
     glm::mat4 m_model_matrix { glm::mat4(1.0f) };
     GLuint m_material_UBO { 0 };
+	bool m_animationEnabled{ false };
+	std::vector<glm::vec3> m_animateCurvePoints;
 };
 
 

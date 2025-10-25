@@ -84,18 +84,79 @@ RS_Model::RS_Model()
     glGenBuffers(1, &m_material_UBO);
 }
 
+std::vector<std::vector<int>> buildPascalTriangle(int n) {
+    std::vector<std::vector<int>> triangle = {};
+
+    for(int i = 0; i <= n; i++) {
+        std::vector<int> row = {};
+        for (int j = 0; j <= n; j++) {
+            if (j > i) {
+                row.push_back(0);
+                continue;
+            }
+            if (j == 0 || j == i) {
+                row.push_back(1);
+                continue;
+            }
+            row.push_back(triangle[i - 1][j - 1] + triangle[i - 1][j]);
+        }
+        triangle.push_back(row);
+	}
+    
+    return triangle;
+}
+
+// Animate a model along a given curve
+glm::mat4 animate(glm::mat4 matrix, std::vector<glm::vec3> curve, float t, const std::vector<std::vector<int>> triangle) {
+	glm::vec3 position(0.0f);
+    glm::vec3 tangent(0.0f);
+
+	// Calculate position using Bezier curve formula
+    for(int i = 0; i < curve.size(); i++) {
+		position += float(float(triangle[curve.size() - 1][i]) * pow(1.0 - t, curve.size() - 1 - i) * pow(t, i)) * curve[i];
+	}
+	// Calculate tangent using derivative of Bezier curve formula
+    for (int i = 0; i < curve.size() - 1; i++) {
+        tangent += float(float(triangle[curve.size() - 2][i]) * pow(1.0f - t, curve.size() - 2 - i) * pow(t, i)) * (curve[i + 1] - curve[i]);
+    }
+	tangent *= float(curve.size() - 1);
+    glm::vec3 direction = normalize(tangent);
+
+    glm::vec3 right = normalize(cross(glm::vec3(0.0f, 1.0f, 0.0f), direction));
+	glm::vec3 up = cross(direction, right);
+
+    glm::mat4 rot(1.0f);
+    rot[0] = glm::vec4(right, 0.0f);    // right direction
+    rot[1] = glm::vec4(up, 0.0f);       // up direction
+    rot[2] = glm::vec4(direction, 0.0f);// forward direction
+
+    matrix = glm::translate(matrix, position);
+    return matrix * rot;
+}
 
 void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMatrix)
 {
     // Compute MVP matrix
-    const glm::mat4 mvpMatrix = viewProjectionMatrix * m_model_matrix;
+    glm::mat4 model_matrix = m_model_matrix;
+
+    if (m_animationEnabled) {
+        float t = std::chrono::duration<float>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+        t = t / m_animateTime;
+        t = fmod(t, 1.0f);
+
+        const std::vector<std::vector<int>> pascalTriangle = buildPascalTriangle(m_animateCurvePoints.size());
+
+        model_matrix = animate(model_matrix, m_animateCurvePoints, t, pascalTriangle);
+    }
+
+    const glm::mat4 mvpMatrix = viewProjectionMatrix * model_matrix;
 
     // Compute normal transformation matrix (inverse transpose of model matrix)
-    const glm::mat3 normalModelMatrix = glm::transpose(glm::inverse(glm::mat3(m_model_matrix)));
+    const glm::mat3 normalModelMatrix = glm::transpose(glm::inverse(glm::mat3(model_matrix)));
 
     // Set per-model uniforms
     glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-    glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(m_model_matrix));
+    glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(model_matrix));
     glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE,
                        glm::value_ptr(normalModelMatrix));
 
@@ -154,6 +215,35 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
         glUniform1i(drawShader.getUniformLocation("hasTexCoords"), m_meshes[i].hasTextureCoords() ? 1 : 0);
         glUniform1i(drawShader.getUniformLocation("useMaterial"), 1);
 
+        // I know this is messy, I'll think of a better way to do this later, I just want something pushed .-.
+        if (i == 2 && m_animationEnabled) {
+            float t = std::chrono::duration<float>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+            glm::mat4 alt_model_matrix = glm::translate(
+                glm::rotate(
+                    glm::translate(
+                        glm::mat4(1.0f), { 0.0f, -1.0f, 0.0f }
+                    ), sin(t) * 0.1f, { 1, 0, 0 }),
+                { 0.0f, 1.0f, 0.0f }
+            );
+
+            alt_model_matrix = alt_model_matrix * model_matrix;
+            const glm::mat4 alt_mvpMatrix = viewProjectionMatrix * alt_model_matrix;
+
+            // Compute normal transformation matrix (inverse transpose of model matrix)
+            const glm::mat3 alt_normalModelMatrix = glm::transpose(glm::inverse(glm::mat3(alt_model_matrix)));
+
+            // Set per-model uniforms
+            glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(alt_mvpMatrix));
+            glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(alt_model_matrix));
+            glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE,
+                glm::value_ptr(alt_normalModelMatrix));
+        }
+        else {
+            glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(mvpMatrix));
+            glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(model_matrix));
+            glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE,
+                glm::value_ptr(normalModelMatrix));
+        }
 
         // Draw mesh
         m_meshes[i].draw(drawShader);

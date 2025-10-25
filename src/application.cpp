@@ -141,7 +141,7 @@ public:
         // Add default camera to the scene
         defaultScene.addCamera(std::make_unique<Trackball>(&m_window, glm::radians(80.0f), 4.0f));
 
-        // Load dragon model
+        // Load ship model
         RS_Model shipModel;
         std::vector<GPUMesh> shipMeshes = GPUMesh::loadMeshGPU(RESOURCE_ROOT "resources/ship/ship.obj", true);
 
@@ -153,6 +153,16 @@ public:
             shipModel.addMesh(std::move(mesh));
             shipModel.addMaterial(std::move(material));
         }
+
+        std::vector<glm::vec3> curve = {
+            glm::vec3(0.0f, 0.0f, 0.0f),
+            glm::vec3(0.0f, 0.0f, 2.0f),
+            glm::vec3(4.0f, 0.0f, 0.0f),
+            glm::vec3(0.0f, 0.0f, -2.0f),
+            glm::vec3(0.0f, 0.0f, 0.0f)
+        };
+
+        shipModel.setAnimationCurve(curve);
 
         // Add dragon to scene
         defaultScene.addModel(std::move(shipModel));
@@ -206,6 +216,9 @@ public:
                 }
             }
             ImGui::EndListBox();
+        }
+        if (ImGui::Button("Add Camera")) {
+			activeScene.addCamera(std::make_unique<Trackball>(&m_window, glm::radians(80.0f), 4.0f));
         }
 
         // Lighting controls
@@ -297,6 +310,11 @@ public:
 
                     ImGui::PopID();
                 }
+
+                if (ImGui::Button("Toggle animation")) {
+					model.enableAnimation(!model.getAnimationEnabled());
+                }
+				ImGui::InputFloat("Animation Time", &model.m_animateTime, 0.1f, 5.0f);
 
                 ImGui::TreePop();
             }
