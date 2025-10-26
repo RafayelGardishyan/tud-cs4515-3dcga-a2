@@ -50,8 +50,8 @@ public:
     std::vector<std::unique_ptr<Trackball>>& getCameras() { return m_cameras; }
     const std::vector<std::unique_ptr<Trackball>>& getCameras() const { return m_cameras; }
     size_t getActiveCameraIndex() const { return m_activeCameraIndex; }
-    void setActiveCameraIndex(size_t index) { m_activeCameraIndex = index; }
-    void addCamera(std::unique_ptr<Trackball> camera) { m_cameras.push_back(std::move(camera)); }
+    void setActiveCameraIndex(size_t index);
+    void addCamera(std::unique_ptr<Trackball> camera);
 
     // Light management
     std::vector<RS_Light>& getLights() { return m_lights; }

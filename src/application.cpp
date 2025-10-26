@@ -156,9 +156,9 @@ public:
 
         std::vector<glm::vec3> curve = {
             glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::vec3(0.0f, 0.0f, 2.0f),
-            glm::vec3(4.0f, 0.0f, 0.0f),
-            glm::vec3(0.0f, 0.0f, -2.0f),
+            glm::vec3(0.0f, 2.0f, 5.0f),
+            glm::vec3(8.0f, 0.0f, 0.0f),
+            glm::vec3(0.0f, -2.0f, -5.0f),
             glm::vec3(0.0f, 0.0f, 0.0f)
         };
 
@@ -218,7 +218,17 @@ public:
             ImGui::EndListBox();
         }
         if (ImGui::Button("Add Camera")) {
-			activeScene.addCamera(std::make_unique<Trackball>(&m_window, glm::radians(80.0f), 4.0f));
+            // Copy the current active camera's position and orientation
+            const Trackball& currentCamera = activeScene.getActiveCamera();
+            auto newCamera = std::make_unique<Trackball>(
+                &m_window,
+                glm::radians(80.0f),
+                currentCamera.lookAt(),
+                currentCamera.distanceFromLookAt(),
+                currentCamera.rotationEulerAngles().x,
+                currentCamera.rotationEulerAngles().y
+            );
+			activeScene.addCamera(std::move(newCamera));
         }
 
         // Lighting controls

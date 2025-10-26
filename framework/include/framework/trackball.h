@@ -36,6 +36,10 @@ public:
 
     void setCamera(const glm::vec3 lookAt, const glm::vec3 rotations, const float dist); // Set the position and orientation of the camera.
 
+    // Enable/disable input handling for this camera
+    void setEnabled(bool enabled);
+    [[nodiscard]] bool isEnabled() const;
+
     // Generate ray given pixel in NDC space (ranging from -1 to +1. (-1,-1) at bottom left, (+1, +1) at top right).
     [[nodiscard]] Ray generateRay(const glm::vec2& pixel) const;
 
@@ -50,6 +54,7 @@ private:
     float m_halfScreenSpaceHeight;
     float m_halfScreenSpaceWidth;
     bool m_canTranslate { true };
+    bool m_enabled { true }; // Whether this camera responds to input
 
     glm::vec3 m_lookAt { 0.0f }; // Point that the camera is looking at / rotating around.
     float m_distanceFromLookAt;

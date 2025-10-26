@@ -9,6 +9,33 @@ DISABLE_WARNINGS_PUSH()
 #include <glm/gtc/type_ptr.hpp>
 DISABLE_WARNINGS_POP()
 
+void RS_Scene::setActiveCameraIndex(size_t index)
+{
+    if (index >= m_cameras.size()) {
+        return; // Invalid index
+    }
+
+    // Disable the current active camera
+    if (m_activeCameraIndex < m_cameras.size()) {
+        m_cameras[m_activeCameraIndex]->setEnabled(false);
+    }
+
+    // Update the active camera index
+    m_activeCameraIndex = index;
+
+    // Enable the new active camera
+    m_cameras[m_activeCameraIndex]->setEnabled(true);
+}
+
+void RS_Scene::addCamera(std::unique_ptr<Trackball> camera)
+{
+    // New cameras are disabled by default unless it's the first camera
+    bool isFirstCamera = m_cameras.empty();
+    camera->setEnabled(isFirstCamera);
+
+    m_cameras.push_back(std::move(camera));
+}
+
 void RS_Scene::draw(const Shader& drawShader, RS_RenderSettings settings)
 {
     if (m_cameras.empty()) {

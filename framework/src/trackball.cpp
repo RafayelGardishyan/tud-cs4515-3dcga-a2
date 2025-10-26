@@ -68,6 +68,16 @@ void Trackball::setCamera(const glm::vec3 lookAt, const glm::vec3 rotations, con
     m_distanceFromLookAt = dist;
 }
 
+void Trackball::setEnabled(bool enabled)
+{
+    m_enabled = enabled;
+}
+
+bool Trackball::isEnabled() const
+{
+    return m_enabled;
+}
+
 glm::vec3 Trackball::position() const
 {
     return m_lookAt + glm::quat(m_rotationEulerAngles) * glm::vec3(0, 0, -m_distanceFromLookAt);
@@ -132,6 +142,7 @@ glm::vec3 Trackball::left() const
 
 void Trackball::mouseButtonCallback(int button, int action, int /* mods */)
 {
+    if (!m_enabled) return;
 
     if ((button == GLFW_MOUSE_BUTTON_LEFT || button == GLFW_MOUSE_BUTTON_RIGHT) && action == GLFW_PRESS) {
         m_prevCursorPos = m_pWindow->getCursorPos();
@@ -140,6 +151,8 @@ void Trackball::mouseButtonCallback(int button, int action, int /* mods */)
 
 void Trackball::mouseMoveCallback(const glm::vec2& pos)
 {
+    if (!m_enabled) return;
+
     const bool rotateXY = m_pWindow->isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
     const bool translateXY = m_canTranslate && m_pWindow->isMouseButtonPressed(GLFW_MOUSE_BUTTON_RIGHT);
 
@@ -163,6 +176,8 @@ void Trackball::mouseMoveCallback(const glm::vec2& pos)
 
 void Trackball::mouseScrollCallback(const glm::vec2& offset)
 {
+    if (!m_enabled) return;
+
     // Move the camera closer/further from the look at point when the user scrolls on his/her mousewheel.
     m_distanceFromLookAt += -float(offset.y) * zoomSpeedFactor;
     m_distanceFromLookAt = std::clamp(m_distanceFromLookAt, 0.1f, 100.0f);

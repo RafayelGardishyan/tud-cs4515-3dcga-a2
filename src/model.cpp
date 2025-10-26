@@ -5,12 +5,19 @@
 #include "model.h"
 #include <framework/mesh.h>
 #include <iostream>
+#include <functional>
+#include <algorithm>
+#include <chrono>
 #include <framework/disable_all_warnings.h>
 DISABLE_WARNINGS_PUSH()
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 DISABLE_WARNINGS_POP()
+
+// Forward declarations
+std::vector<std::vector<int>> buildPascalTriangle(int n);
 
 RS_Material RS_Material::createFromMesh(const GPUMesh& mesh)
 {
@@ -84,6 +91,133 @@ RS_Model::RS_Model()
     glGenBuffers(1, &m_material_UBO);
 }
 
+void RS_Model::setPosition(const glm::vec3& pos)
+{
+    // Extract current rotation and scale, then rebuild with new position
+    m_model_matrix[3] = glm::vec4(pos, 1.0f);
+}
+
+void RS_Model::setRotation(const glm::vec3& eulerAngles)
+{
+    // Build rotation matrix from Euler angles (in radians)
+    glm::mat4 rotation = glm::mat4(1.0f);
+    rotation = glm::rotate(rotation, eulerAngles.z, glm::vec3(0.0f, 0.0f, 1.0f));
+    rotation = glm::rotate(rotation, eulerAngles.y, glm::vec3(0.0f, 1.0f, 0.0f));
+    rotation = glm::rotate(rotation, eulerAngles.x, glm::vec3(1.0f, 0.0f, 0.0f));
+
+    // Preserve position
+    glm::vec3 position = glm::vec3(m_model_matrix[3]);
+    m_model_matrix = rotation;
+    m_model_matrix[3] = glm::vec4(position, 1.0f);
+}
+
+void RS_Model::setScale(const glm::vec3& scale)
+{
+    // Apply scale to the existing matrix
+    m_model_matrix = glm::scale(m_model_matrix, scale);
+}
+
+void RS_Model::setAnimationCurve(const std::vector<glm::vec3>& curvePoints)
+{
+    m_animateCurvePoints = curvePoints;
+    // Rebuild Pascal triangle when curve changes
+    if (!curvePoints.empty()) {
+        m_pascalTriangle = buildPascalTriangle(curvePoints.size());
+    }
+}
+
+void RS_Model::enableAnimation(bool enable)
+{
+    if (enable && !m_animationEnabled) {
+        // Starting animation - record start time
+        m_animationStartTime = std::chrono::steady_clock::now();
+        m_animationStarted = true;
+    } else if (!enable) {
+        // Stopping animation - reset flag
+        m_animationStarted = false;
+    }
+    m_animationEnabled = enable;
+}
+
+void RS_Model::setMeshHierarchy(const std::vector<MeshNode>& hierarchy)
+{
+    m_hierarchy = hierarchy;
+    m_worldTransforms.resize(m_meshes.size(), glm::mat4(1.0f));
+    m_useHierarchy = !hierarchy.empty();
+    if (m_useHierarchy) {
+        computeWorldTransforms();
+    }
+}
+
+void RS_Model::setMeshParent(int meshIndex, int parentMeshIndex, const glm::mat4& localTransform)
+{
+    if (meshIndex < 0 || meshIndex >= static_cast<int>(m_meshes.size())) {
+        return; // Invalid mesh index
+    }
+
+    // Initialize hierarchy if not already done
+    if (m_hierarchy.empty()) {
+        m_hierarchy.resize(m_meshes.size());
+        for (size_t i = 0; i < m_meshes.size(); i++) {
+            m_hierarchy[i].meshIndex = static_cast<int>(i);
+            m_hierarchy[i].parentIndex = -1;
+            m_hierarchy[i].localTransform = glm::mat4(1.0f);
+        }
+        m_worldTransforms.resize(m_meshes.size(), glm::mat4(1.0f));
+    }
+
+    // Set parent-child relationship
+    m_hierarchy[meshIndex].parentIndex = parentMeshIndex;
+    m_hierarchy[meshIndex].localTransform = localTransform;
+
+    // Update parent's child list
+    if (parentMeshIndex >= 0 && parentMeshIndex < static_cast<int>(m_hierarchy.size())) {
+        auto& children = m_hierarchy[parentMeshIndex].childIndices;
+        if (std::find(children.begin(), children.end(), meshIndex) == children.end()) {
+            children.push_back(meshIndex);
+        }
+    }
+
+    m_useHierarchy = true;
+    computeWorldTransforms();
+}
+
+void RS_Model::computeWorldTransforms()
+{
+    if (m_hierarchy.empty() || m_worldTransforms.size() != m_meshes.size()) {
+        return;
+    }
+
+    // Lambda for recursive world transform computation
+    std::function<void(int, const glm::mat4&)> computeNode = [&](int nodeIndex, const glm::mat4& parentWorld) {
+        if (nodeIndex < 0 || nodeIndex >= static_cast<int>(m_hierarchy.size())) {
+            return;
+        }
+
+        const MeshNode& node = m_hierarchy[nodeIndex];
+
+        // Compute world transform: parent * local
+        glm::mat4 worldTransform = parentWorld * node.localTransform;
+
+        // Store for the mesh
+        if (node.meshIndex >= 0 && node.meshIndex < static_cast<int>(m_worldTransforms.size())) {
+            m_worldTransforms[node.meshIndex] = worldTransform;
+        }
+
+        // Recursively compute children
+        for (int childIndex : node.childIndices) {
+            computeNode(childIndex, worldTransform);
+        }
+    };
+
+    // Compute world transforms starting from root nodes (those with no parent)
+    for (size_t i = 0; i < m_hierarchy.size(); i++) {
+        if (m_hierarchy[i].parentIndex == -1) {
+            computeNode(static_cast<int>(i), glm::mat4(1.0f));
+        }
+    }
+}
+
 std::vector<std::vector<int>> buildPascalTriangle(int n) {
     std::vector<std::vector<int>> triangle = {};
 
@@ -107,7 +241,7 @@ std::vector<std::vector<int>> buildPascalTriangle(int n) {
 }
 
 // Animate a model along a given curve
-glm::mat4 animate(glm::mat4 matrix, std::vector<glm::vec3> curve, float t, const std::vector<std::vector<int>> triangle) {
+glm::mat4 animate(glm::mat4 matrix, std::vector<glm::vec3> curve, float t, const std::vector<std::vector<int>>& triangle) {
 	glm::vec3 position(0.0f);
     glm::vec3 tangent(0.0f);
 
@@ -120,18 +254,27 @@ glm::mat4 animate(glm::mat4 matrix, std::vector<glm::vec3> curve, float t, const
         tangent += float(float(triangle[curve.size() - 2][i]) * pow(1.0f - t, curve.size() - 2 - i) * pow(t, i)) * (curve[i + 1] - curve[i]);
     }
 	tangent *= float(curve.size() - 1);
-    glm::vec3 direction = normalize(tangent);
+    glm::vec3 direction = glm::normalize(tangent);
 
-    glm::vec3 right = normalize(cross(glm::vec3(0.0f, 1.0f, 0.0f), direction));
-	glm::vec3 up = cross(direction, right);
+    // Build orthonormal basis from tangent direction
+    // Handle edge case where direction is parallel to world up
+    glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+    if (glm::abs(glm::dot(direction, worldUp)) > 0.999f) {
+        worldUp = glm::vec3(1.0f, 0.0f, 0.0f);
+    }
 
-    glm::mat4 rot(1.0f);
-    rot[0] = glm::vec4(right, 0.0f);    // right direction
-    rot[1] = glm::vec4(up, 0.0f);       // up direction
-    rot[2] = glm::vec4(direction, 0.0f);// forward direction
+    glm::vec3 right = glm::normalize(glm::cross(worldUp, direction));
+	glm::vec3 up = glm::cross(direction, right);
 
-    matrix = glm::translate(matrix, position);
-    return matrix * rot;
+    // Build transformation matrix: rotation to orient along curve, then translation to position
+    glm::mat4 orientation(1.0f);
+    orientation[0] = glm::vec4(right, 0.0f);      // X axis
+    orientation[1] = glm::vec4(up, 0.0f);         // Y axis
+    orientation[2] = glm::vec4(direction, 0.0f);  // Z axis (forward)
+    orientation[3] = glm::vec4(position, 1.0f);   // Position
+
+    // Apply base model matrix first, then animation transform
+    return orientation * matrix;
 }
 
 void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMatrix)
@@ -139,14 +282,16 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
     // Compute MVP matrix
     glm::mat4 model_matrix = m_model_matrix;
 
-    if (m_animationEnabled) {
-        float t = std::chrono::duration<float>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-        t = t / m_animateTime;
-        t = fmod(t, 1.0f);
+    if (m_animationEnabled && m_animationStarted && !m_animateCurvePoints.empty() && !m_pascalTriangle.empty()) {
+        // Calculate elapsed time since animation started
+        auto now = std::chrono::steady_clock::now();
+        float elapsedTime = std::chrono::duration_cast<std::chrono::duration<float>>(now - m_animationStartTime).count();
 
-        const std::vector<std::vector<int>> pascalTriangle = buildPascalTriangle(m_animateCurvePoints.size());
+        // Normalize to [0, 1] range, looping every m_animateTime seconds
+        float t = fmod(elapsedTime / m_animateTime, 1.0f);
 
-        model_matrix = animate(model_matrix, m_animateCurvePoints, t, pascalTriangle);
+        // Use cached Pascal triangle
+        model_matrix = animate(model_matrix, m_animateCurvePoints, t, m_pascalTriangle);
     }
 
     const glm::mat4 mvpMatrix = viewProjectionMatrix * model_matrix;
@@ -162,6 +307,20 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
 
     for (size_t i = 0; i < m_meshes.size(); i++)
     {
+        // Compute per-mesh transform (use hierarchy if enabled)
+        glm::mat4 meshTransform = model_matrix;
+        if (m_useHierarchy && i < m_worldTransforms.size()) {
+            meshTransform = model_matrix * m_worldTransforms[i];
+        }
+
+        const glm::mat4 meshMvpMatrix = viewProjectionMatrix * meshTransform;
+        const glm::mat3 meshNormalMatrix = glm::transpose(glm::inverse(glm::mat3(meshTransform)));
+
+        // Update uniforms for this mesh
+        glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(meshMvpMatrix));
+        glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(meshTransform));
+        glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE, glm::value_ptr(meshNormalMatrix));
+
         // Bind material i
         const RS_Material& material = m_materials[i];
 
@@ -214,36 +373,6 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
 
         glUniform1i(drawShader.getUniformLocation("hasTexCoords"), m_meshes[i].hasTextureCoords() ? 1 : 0);
         glUniform1i(drawShader.getUniformLocation("useMaterial"), 1);
-
-        // I know this is messy, I'll think of a better way to do this later, I just want something pushed .-.
-        if (i == 2 && m_animationEnabled) {
-            float t = std::chrono::duration<float>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-            glm::mat4 alt_model_matrix = glm::translate(
-                glm::rotate(
-                    glm::translate(
-                        glm::mat4(1.0f), { 0.0f, -1.0f, 0.0f }
-                    ), sin(t) * 0.1f, { 1, 0, 0 }),
-                { 0.0f, 1.0f, 0.0f }
-            );
-
-            alt_model_matrix = alt_model_matrix * model_matrix;
-            const glm::mat4 alt_mvpMatrix = viewProjectionMatrix * alt_model_matrix;
-
-            // Compute normal transformation matrix (inverse transpose of model matrix)
-            const glm::mat3 alt_normalModelMatrix = glm::transpose(glm::inverse(glm::mat3(alt_model_matrix)));
-
-            // Set per-model uniforms
-            glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(alt_mvpMatrix));
-            glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(alt_model_matrix));
-            glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE,
-                glm::value_ptr(alt_normalModelMatrix));
-        }
-        else {
-            glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-            glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(model_matrix));
-            glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE,
-                glm::value_ptr(normalModelMatrix));
-        }
 
         // Draw mesh
         m_meshes[i].draw(drawShader);
