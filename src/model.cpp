@@ -222,7 +222,7 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
                 glm::rotate(
                     glm::translate(
                         glm::mat4(1.0f), { 0.0f, -1.0f, 0.0f }
-                    ), sin(t) * 0.1f, { 1, 0, 0 }),
+                    ), glm::sin(t) * 0.1f, { 1, 0, 0 }),
                 { 0.0f, 1.0f, 0.0f }
             );
 

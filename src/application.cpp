@@ -19,6 +19,7 @@ DISABLE_WARNINGS_POP()
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <math.h>
 #include <vector>
 
 class Application {
@@ -141,6 +142,12 @@ public:
         // Add default camera to the scene
         defaultScene.addCamera(std::make_unique<Trackball>(&m_window, glm::radians(80.0f), 4.0f));
 
+        // Add minimap camera
+        defaultScene.addCamera(std::make_unique<Trackball>(&m_window, glm::radians(80.0f), 5.0f));
+
+        defaultScene.getCameras()[1]->setCamera({ 0.0, 0.0, 0.0 }, { 0.5 * 3.14159, 0.0, 0.0 }, 5.0f);
+        defaultScene.getCameras()[1]->toggleMovement();
+
         // Load ship model
         RS_Model shipModel;
         std::vector<GPUMesh> shipMeshes = GPUMesh::loadMeshGPU(RESOURCE_ROOT "resources/ship/ship.obj", true);
@@ -207,9 +214,21 @@ public:
         {
             for (size_t i = 0; i < cameraCount; i++) {
                 const bool isSelected = (i == activeCameraIndex);
-                if (ImGui::Selectable(("Camera " + std::to_string(i + 1)).c_str(), isSelected)) {
-                    activeCameraIndex = i;
-                    activeScene.setActiveCameraIndex(activeCameraIndex);
+                if (i == 1) {
+                    if (ImGui::Selectable("Minimap (not yet implemented)", isSelected)) {
+                        activeScene.getActiveCamera().toggleMovement();
+                        activeCameraIndex = i;
+                        activeScene.setActiveCameraIndex(activeCameraIndex);
+                        activeScene.getActiveCamera().toggleMovement();
+                    }
+                }
+                else {
+                    if (ImGui::Selectable(("Camera " + std::to_string(i + 1)).c_str(), isSelected)) {
+                        activeScene.getActiveCamera().toggleMovement();
+                        activeCameraIndex = i;
+                        activeScene.setActiveCameraIndex(activeCameraIndex);
+                        activeScene.getActiveCamera().toggleMovement();
+                    }
                 }
                 if (isSelected) {
                     ImGui::SetItemDefaultFocus();
@@ -219,6 +238,7 @@ public:
         }
         if (ImGui::Button("Add Camera")) {
 			activeScene.addCamera(std::make_unique<Trackball>(&m_window, glm::radians(80.0f), 4.0f));
+            activeScene.getCameras().back()->toggleMovement();
         }
 
         // Lighting controls
@@ -464,6 +484,7 @@ private:
     size_t m_selectedLightIndex = 0;
 
     bool m_debug = true;
+    bool m_minimap = true;
 
     // Global texture toggles
     RS_RenderSettings m_settings;

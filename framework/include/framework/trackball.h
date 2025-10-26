@@ -21,6 +21,7 @@ public:
     static void printHelp();
 
     void disableTranslation();
+    void toggleMovement();
 
     [[nodiscard]] glm::vec3 left() const;
     [[nodiscard]] glm::vec3 up() const;
@@ -50,6 +51,7 @@ private:
     float m_halfScreenSpaceHeight;
     float m_halfScreenSpaceWidth;
     bool m_canTranslate { true };
+    bool m_canMove{ true };
 
     glm::vec3 m_lookAt { 0.0f }; // Point that the camera is looking at / rotating around.
     float m_distanceFromLookAt;

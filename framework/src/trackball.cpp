@@ -56,6 +56,10 @@ void Trackball::printHelp()
     std::cout << "Middle button: move along Z." << std::endl;
 }
 
+void Trackball::toggleMovement() {
+    m_canMove = !m_canMove;
+}
+
 void Trackball::disableTranslation()
 {
     m_canTranslate = false;
@@ -140,8 +144,8 @@ void Trackball::mouseButtonCallback(int button, int action, int /* mods */)
 
 void Trackball::mouseMoveCallback(const glm::vec2& pos)
 {
-    const bool rotateXY = m_pWindow->isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
-    const bool translateXY = m_canTranslate && m_pWindow->isMouseButtonPressed(GLFW_MOUSE_BUTTON_RIGHT);
+    const bool rotateXY = m_canMove && m_pWindow->isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
+    const bool translateXY = m_canMove && m_canTranslate && m_pWindow->isMouseButtonPressed(GLFW_MOUSE_BUTTON_RIGHT);
 
     if (rotateXY || translateXY) {
         // Amount of cursor motion compared to the previous frame. Positive = right/top
