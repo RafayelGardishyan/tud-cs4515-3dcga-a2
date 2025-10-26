@@ -216,7 +216,7 @@ RS_Cubemap::~RS_Cubemap()
     }
 }
 
-void RS_Cubemap::bind(GLint textureSlot)
+void RS_Cubemap::bind(GLint textureSlot) const
 {
     glActiveTexture(static_cast<GLenum>(textureSlot));
     glBindTexture(GL_TEXTURE_CUBE_MAP, m_cubemap);

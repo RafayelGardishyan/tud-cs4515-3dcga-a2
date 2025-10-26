@@ -31,6 +31,9 @@ uniform vec3 cameraPosition;
 uniform vec3 lightPosition;
 uniform vec3 lightColor;
 uniform float lightIntensity;
+uniform int lightType;
+uniform vec3 lightDirection;
+uniform float spotlightCosCutoff;
 
 in vec3 fragPosition;
 in vec3 fragNormal;
@@ -41,6 +44,108 @@ layout(location = 0) out vec4 fragColor;
 
 
 const float PI = 3.1415926;
+const int LIGHT_TYPE_POINT = 0;
+const int LIGHT_TYPE_SPOT = 1;
+
+uniform bool enableShadows;
+uniform bool enableShadowPCF;
+uniform sampler2D shadowMap;
+uniform samplerCube shadowCubemap;
+uniform mat4 lightSpaceMatrix;
+uniform float shadowFarPlane;
+uniform vec2 shadowMapTexelSize;
+
+float offset_lookup(sampler2D shadowMapTex, vec2 baseCoord, vec2 offset)
+{
+    vec2 sampleCoord = baseCoord + offset * shadowMapTexelSize;
+    return texture(shadowMapTex, sampleCoord).r;
+}
+
+float cubemap_offset_lookup(samplerCube cubeMap, vec3 direction, vec3 offset)
+{
+    vec3 offsetDirection = normalize(direction + offset);
+    return texture(cubeMap, offsetDirection).r;
+}
+
+float computeSpotShadow(vec3 worldPos, vec3 N, vec3 L)
+{
+    vec4 fragLightSpace = lightSpaceMatrix * vec4(worldPos, 1.0);
+    vec3 projCoords = fragLightSpace.xyz / fragLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
+
+    if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
+        return 1.0;
+
+    float closestDepth = texture(shadowMap, projCoords.xy).r;
+    float currentDepth = projCoords.z;
+    float bias = max(0.002 * (1.0 - dot(N, L)), 0.0005);
+
+    if (!enableShadowPCF)
+        return (currentDepth - bias) > closestDepth ? 0.0 : 1.0;
+
+    float occlusion = 0.0;
+    for (int y = -1; y <= 1; ++y) {
+        for (int x = -1; x <= 1; ++x) {
+            float depthSample = offset_lookup(shadowMap, projCoords.xy, vec2(x, y));
+            occlusion += (currentDepth - bias) > depthSample ? 1.0 : 0.0;
+        }
+    }
+
+    float averageOcclusion = occlusion / 9.0;
+    return 1.0 - averageOcclusion;
+}
+
+float computePointShadow(vec3 worldPos, vec3 N, vec3 L)
+{
+    vec3 fragToLight = worldPos - lightPosition;
+    float currentDepth = length(fragToLight);
+    float bias = max(0.05 * (1.0 - dot(N, L)), 0.01);
+
+    float closestDepth = texture(shadowCubemap, fragToLight).r * shadowFarPlane;
+    if (!enableShadowPCF)
+        return (currentDepth - bias) > closestDepth ? 0.0 : 1.0;
+
+    const float sampleRadius = 0.02;
+    const vec3 sampleOffsetDirections[6] = vec3[](
+        vec3(sampleRadius, 0.0, 0.0),
+        vec3(-sampleRadius, 0.0, 0.0),
+        vec3(0.0, sampleRadius, 0.0),
+        vec3(0.0, -sampleRadius, 0.0),
+        vec3(0.0, 0.0, sampleRadius),
+        vec3(0.0, 0.0, -sampleRadius)
+    );
+
+    float occlusion = 0.0;
+    for (int i = 0; i < 6; ++i) {
+        float depthSample = cubemap_offset_lookup(shadowCubemap, fragToLight, sampleOffsetDirections[i]) * shadowFarPlane;
+        occlusion += (currentDepth - bias) > depthSample ? 1.0 : 0.0;
+    }
+
+    float averageOcclusion = occlusion / 6.0;
+    return 1.0 - averageOcclusion;
+}
+
+float computeShadow(vec3 worldPos, vec3 N, vec3 L)
+{
+    if (!enableShadows)
+        return 1.0;
+
+    if (lightType == LIGHT_TYPE_SPOT)
+        return computeSpotShadow(worldPos, N, L);
+
+    return computePointShadow(worldPos, N, L);
+}
+
+float computeSpotAttenuation(vec3 worldPos)
+{
+    if (lightType != LIGHT_TYPE_SPOT)
+        return 1.0;
+
+    vec3 lightToFragment = normalize(worldPos - lightPosition);
+    float cosTheta = dot(normalize(lightDirection), lightToFragment);
+    float softness = 0.02;
+    return smoothstep(spotlightCosCutoff, spotlightCosCutoff + softness, cosTheta);
+}
 
 // Cook-Torrance: http://www.codinglabs.net/article_physically_based_rendering_cook_torrance.aspx
 float chiGGX(float v)
@@ -163,6 +268,9 @@ void main()
     // Combine with light contribution (rendering equation)
     vec3 radiance = lightColor * lightIntensity;
     vec3 color = (diffuse + specular) * radiance * NdotL;
+    float shadowMultiplier = computeShadow(fragPosition, N, L);
+    float spotlightMultiplier = computeSpotAttenuation(fragPosition);
+    color *= shadowMultiplier * spotlightMultiplier;
 
     // Add emissive
     color += emissive;

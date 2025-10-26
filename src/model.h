@@ -49,6 +49,8 @@ public:
     RS_Model();
 
     void draw(const Shader& drawShader, const glm::mat4& viewProjectionMatrix);
+    void drawDepth(const Shader& depthShader, const glm::mat4& viewProjectionMatrix);
+    void drawDepthCubemap(const Shader& depthCubemapShader);
     void addMesh(GPUMesh&& mesh);
     void addMaterial(RS_Material&& material);
     void setAnimationCurve(const std::vector<glm::vec3>& curvePoints) { m_animateCurvePoints = curvePoints; }
@@ -68,6 +70,9 @@ private:
     GLuint m_material_UBO { 0 };
 	bool m_animationEnabled{ false };
 	std::vector<glm::vec3> m_animateCurvePoints;
+
+    glm::mat4 evaluateModelMatrix() const;
+    glm::mat4 evaluateMeshSpecificMatrix(size_t meshIndex, const glm::mat4& baseMatrix) const;
 };
 
 

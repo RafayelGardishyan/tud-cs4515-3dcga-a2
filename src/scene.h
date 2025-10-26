@@ -6,6 +6,7 @@
 #define COMPUTERGRAPHICS_RSSCENE_H
 #include <utility>
 #include <vector>
+#include <glm/vec2.hpp>
 
 #include "light.h"
 #include "model.h"
@@ -21,6 +22,8 @@ struct RS_RenderSettings
     bool enableMetallicTextures = true;
     bool enableToneMapping = true;
     bool enableGammaCorrection = true;
+    bool enableShadows = true;
+    bool enableShadowPCF = true;
 };
 
 class RS_Scene
@@ -36,6 +39,11 @@ public:
 
     // Draw skybox background
     void drawSkybox(const Shader& skyboxShader, GLuint skyboxVAO);
+
+    // Generate all required shadow maps for the active scene
+    void renderShadowMaps(const Shader& shadowShader,
+        const Shader& shadowCubemapShader,
+        const RS_RenderSettings& settings);
 
     // These functions are called by the application
     void onKeyPressed(int key, int mods) {};

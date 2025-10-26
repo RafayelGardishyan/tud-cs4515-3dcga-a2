@@ -10,7 +10,10 @@ DISABLE_WARNINGS_PUSH()
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 DISABLE_WARNINGS_POP()
+#include <chrono>
+#include <cmath>
 
 RS_Material RS_Material::createFromMesh(const GPUMesh& mesh)
 {
@@ -136,32 +139,19 @@ glm::mat4 animate(glm::mat4 matrix, std::vector<glm::vec3> curve, float t, const
 
 void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMatrix)
 {
-    // Compute MVP matrix
-    glm::mat4 model_matrix = m_model_matrix;
-
-    if (m_animationEnabled) {
-        float t = std::chrono::duration<float>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-        t = t / m_animateTime;
-        t = fmod(t, 1.0f);
-
-        const std::vector<std::vector<int>> pascalTriangle = buildPascalTriangle(m_animateCurvePoints.size());
-
-        model_matrix = animate(model_matrix, m_animateCurvePoints, t, pascalTriangle);
-    }
-
-    const glm::mat4 mvpMatrix = viewProjectionMatrix * model_matrix;
-
-    // Compute normal transformation matrix (inverse transpose of model matrix)
-    const glm::mat3 normalModelMatrix = glm::transpose(glm::inverse(glm::mat3(model_matrix)));
-
-    // Set per-model uniforms
-    glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-    glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(model_matrix));
-    glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE,
-                       glm::value_ptr(normalModelMatrix));
+    const glm::mat4 baseModelMatrix = evaluateModelMatrix();
 
     for (size_t i = 0; i < m_meshes.size(); i++)
     {
+        const glm::mat4 meshModelMatrix = evaluateMeshSpecificMatrix(i, baseModelMatrix);
+        const glm::mat4 meshMvpMatrix = viewProjectionMatrix * meshModelMatrix;
+        const glm::mat3 meshNormalMatrix = glm::transpose(glm::inverse(glm::mat3(meshModelMatrix)));
+
+        glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(meshMvpMatrix));
+        glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(meshModelMatrix));
+        glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE,
+            glm::value_ptr(meshNormalMatrix));
+
         // Bind material i
         const RS_Material& material = m_materials[i];
 
@@ -215,38 +205,37 @@ void RS_Model::draw(const Shader& drawShader, const glm::mat4& viewProjectionMat
         glUniform1i(drawShader.getUniformLocation("hasTexCoords"), m_meshes[i].hasTextureCoords() ? 1 : 0);
         glUniform1i(drawShader.getUniformLocation("useMaterial"), 1);
 
-        // I know this is messy, I'll think of a better way to do this later, I just want something pushed .-.
-        if (i == 2 && m_animationEnabled) {
-            float t = std::chrono::duration<float>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-            glm::mat4 alt_model_matrix = glm::translate(
-                glm::rotate(
-                    glm::translate(
-                        glm::mat4(1.0f), { 0.0f, -1.0f, 0.0f }
-                    ), glm::sin(t) * 0.1f, { 1, 0, 0 }),
-                { 0.0f, 1.0f, 0.0f }
-            );
-
-            alt_model_matrix = alt_model_matrix * model_matrix;
-            const glm::mat4 alt_mvpMatrix = viewProjectionMatrix * alt_model_matrix;
-
-            // Compute normal transformation matrix (inverse transpose of model matrix)
-            const glm::mat3 alt_normalModelMatrix = glm::transpose(glm::inverse(glm::mat3(alt_model_matrix)));
-
-            // Set per-model uniforms
-            glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(alt_mvpMatrix));
-            glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(alt_model_matrix));
-            glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE,
-                glm::value_ptr(alt_normalModelMatrix));
-        }
-        else {
-            glUniformMatrix4fv(drawShader.getUniformLocation("mvpMatrix"), 1, GL_FALSE, glm::value_ptr(mvpMatrix));
-            glUniformMatrix4fv(drawShader.getUniformLocation("modelMatrix"), 1, GL_FALSE, glm::value_ptr(model_matrix));
-            glUniformMatrix3fv(drawShader.getUniformLocation("normalModelMatrix"), 1, GL_FALSE,
-                glm::value_ptr(normalModelMatrix));
-        }
-
         // Draw mesh
         m_meshes[i].draw(drawShader);
+    }
+}
+
+void RS_Model::drawDepth(const Shader& depthShader, const glm::mat4& viewProjectionMatrix)
+{
+    const glm::mat4 baseModelMatrix = evaluateModelMatrix();
+    const GLint mvpLocation = depthShader.getUniformLocation("mvpMatrix");
+
+    for (size_t i = 0; i < m_meshes.size(); i++) {
+        const glm::mat4 meshModelMatrix = evaluateMeshSpecificMatrix(i, baseModelMatrix);
+        const glm::mat4 meshMvpMatrix = viewProjectionMatrix * meshModelMatrix;
+        glUniformMatrix4fv(mvpLocation, 1, GL_FALSE, glm::value_ptr(meshMvpMatrix));
+        m_meshes[i].draw(depthShader);
+    }
+}
+
+void RS_Model::drawDepthCubemap(const Shader& depthCubemapShader)
+{
+    const glm::mat4 baseModelMatrix = evaluateModelMatrix();
+    const GLint modelLocation = depthCubemapShader.getUniformLocation("modelMatrix");
+
+    for (size_t i = 0; i < m_meshes.size(); i++) {
+        const glm::mat4 meshModelMatrix = evaluateMeshSpecificMatrix(i, baseModelMatrix);
+        glUniformMatrix4fv(
+            modelLocation,
+            1,
+            GL_FALSE,
+            glm::value_ptr(meshModelMatrix));
+        m_meshes[i].draw(depthCubemapShader);
     }
 }
 
@@ -258,4 +247,37 @@ void RS_Model::addMesh(GPUMesh&& mesh)
 void RS_Model::addMaterial(RS_Material&& material)
 {
     m_materials.push_back(std::move(material));
+}
+
+glm::mat4 RS_Model::evaluateModelMatrix() const
+{
+    glm::mat4 modelMatrix = m_model_matrix;
+
+    if (m_animationEnabled && !m_animateCurvePoints.empty()) {
+        float t = std::chrono::duration<float>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+        t = fmod(t / m_animateTime, 1.0f);
+        const std::vector<std::vector<int>> pascalTriangle = buildPascalTriangle(m_animateCurvePoints.size());
+        modelMatrix = animate(modelMatrix, m_animateCurvePoints, t, pascalTriangle);
+    }
+
+    return modelMatrix;
+}
+
+glm::mat4 RS_Model::evaluateMeshSpecificMatrix(size_t meshIndex, const glm::mat4& baseMatrix) const
+{
+    if (meshIndex == 2 && m_animationEnabled) {
+        float t = std::chrono::duration<float>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+        glm::mat4 altModelMatrix = glm::translate(
+            glm::rotate(
+                glm::translate(
+                    glm::mat4(1.0f), { 0.0f, -1.0f, 0.0f }
+                ), glm::sin(t) * 0.1f, { 1, 0, 0 }),
+            { 0.0f, 1.0f, 0.0f }
+        );
+
+        return altModelMatrix * baseMatrix;
+    }
+
+    return baseMatrix;
 }

@@ -26,7 +26,7 @@ public:
     RS_Cubemap& operator=(const RS_Cubemap&) = delete;
     RS_Cubemap& operator=(RS_Cubemap&&);
 
-    void bind(GLint textureSlot);
+    void bind(GLint textureSlot) const;
 
     int getResolution() const { return m_resolution; }
     GLuint getCubemapID() const { return m_cubemap; }

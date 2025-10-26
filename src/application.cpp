@@ -50,8 +50,14 @@ public:
 
             ShaderBuilder shadowBuilder;
             shadowBuilder.addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl");
-            shadowBuilder.addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "Shaders/shadow_frag.glsl");
+            shadowBuilder.addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl");
             m_shadowShader = shadowBuilder.build();
+
+            ShaderBuilder shadowCubemapBuilder;
+            shadowCubemapBuilder.addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_cubemap_vert.glsl");
+            shadowCubemapBuilder.addStage(GL_GEOMETRY_SHADER, RESOURCE_ROOT "shaders/shadow_cubemap_geom.glsl");
+            shadowCubemapBuilder.addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_cubemap_frag.glsl");
+            m_shadowCubemapShader = shadowCubemapBuilder.build();
 
             ShaderBuilder lightBuilder;
             lightBuilder.addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/light_vert.glsl");
@@ -134,9 +140,10 @@ public:
 
         // Add default light to the scene
         RS_Light defaultLight;
-        defaultLight.m_position = glm::vec3(0.0f, 10.0f, 10.0f);
+        defaultLight.m_position = glm::vec3(1.0f, 1.0f, 1.0f);
         defaultLight.m_color = glm::vec3(1.0f, 1.0f, 1.0f);
         defaultLight.m_intensity = 1.0f;
+        defaultLight.setLookAtTarget(glm::vec3(0.0f));
         defaultScene.addLight(std::move(defaultLight));
 
         // Add default camera to the scene
@@ -266,6 +273,7 @@ public:
             newLight.m_position = glm::vec3(0.0f, 2.0f, 0.0f);
             newLight.m_color = glm::vec3(1.0f, 1.0f, 1.0f);
             newLight.m_intensity = 1.0f;
+            newLight.setLookAtTarget(glm::vec3(0.0f));
             activeScene.addLight(std::move(newLight));
         }
         if (!lights.empty()) {
@@ -273,6 +281,37 @@ public:
             ImGui::DragFloat3("Position", glm::value_ptr(selectedLight.m_position), 0.1f);
             ImGui::ColorEdit3("Color", glm::value_ptr(selectedLight.m_color));
             ImGui::DragFloat("Intensity", &selectedLight.m_intensity, 0.1f, 0.0f, 100.0f);
+
+            const char* lightTypeLabels[] = { "Point", "Spot" };
+            int typeIndex = selectedLight.m_type == RS_LIGHT_TYPE_POINT ? 0 : 1;
+            if (ImGui::Combo("Light Type", &typeIndex, lightTypeLabels, IM_ARRAYSIZE(lightTypeLabels))) {
+                selectedLight.m_type = (typeIndex == 0) ? RS_LIGHT_TYPE_POINT : RS_LIGHT_TYPE_SPOT;
+            }
+
+            glm::vec3 lookAt = selectedLight.getLookAtTarget();
+            if (ImGui::DragFloat3("Look-at Target", glm::value_ptr(lookAt), 0.1f)) {
+                selectedLight.setLookAtTarget(lookAt);
+            }
+
+            if (selectedLight.m_type == RS_LIGHT_TYPE_SPOT) {
+                const float RAD_TO_DEG = 57.2957795f;
+                const float DEG_TO_RAD = 0.0174532925f;
+                float fovDegrees = selectedLight.getSpotFov() * RAD_TO_DEG;
+                if (ImGui::SliderFloat("Spotlight FOV", &fovDegrees, 5.0f, 120.0f)) {
+                    selectedLight.setSpotFov(fovDegrees * DEG_TO_RAD);
+                }
+            }
+
+            float nearPlane = selectedLight.getShadowNearPlane();
+            if (ImGui::DragFloat("Shadow Near Plane", &nearPlane, 0.01f, 0.01f, nearPlane + 10.0f)) {
+                selectedLight.setShadowNearPlane(nearPlane);
+                nearPlane = selectedLight.getShadowNearPlane();
+            }
+
+            float farPlane = selectedLight.getShadowFarPlane();
+            if (ImGui::DragFloat("Shadow Far Plane", &farPlane, 0.1f, nearPlane + 0.05f, 500.0f)) {
+                selectedLight.setShadowFarPlane(farPlane);
+            }
         }
 
         // Environment Map controls
@@ -291,6 +330,11 @@ public:
         ImGui::Checkbox("Enable Color Textures", &m_settings.enableColorTextures);
         ImGui::Checkbox("Enable Normal Textures", &m_settings.enableNormalTextures);
         ImGui::Checkbox("Enable Metallic Textures", &m_settings.enableMetallicTextures);
+
+        ImGui::Separator();
+        ImGui::Text("Shadow Settings");
+        ImGui::Checkbox("Enable Shadows", &m_settings.enableShadows);
+        ImGui::Checkbox("Enable PCF", &m_settings.enableShadowPCF);
 
         ImGui::Separator();
         ImGui::Text("Color correction");
@@ -407,6 +451,9 @@ public:
             if (!m_scenes.empty()) {
                 RS_Scene& activeScene = m_scenes[m_activeSceneIndex];
 
+                // Generate shadow maps before rendering the main passes
+                activeScene.renderShadowMaps(m_shadowShader, m_shadowCubemapShader, m_settings);
+
                 // Draw skybox background first
                 activeScene.drawSkybox(m_skyboxShader, m_skyboxVAO);
 
@@ -474,6 +521,7 @@ private:
     // Shaders
     Shader m_defaultShader;
     Shader m_shadowShader;
+    Shader m_shadowCubemapShader;
     Shader m_lightShader;
     Shader m_envShader;
     Shader m_skyboxShader;
