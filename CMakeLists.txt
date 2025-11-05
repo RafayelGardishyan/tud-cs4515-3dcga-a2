@@ -21,6 +21,8 @@ add_executable(Master_TechDemo
 		src/cubemap.h
 		src/cubemap.cpp
         src/light.cpp
+        src/water_surface.cpp
+        src/water_surface.h
 )
 
 target_compile_definitions(Master_TechDemo PRIVATE RESOURCE_ROOT="${CMAKE_CURRENT_LIST_DIR}/")
@@ -58,4 +60,3 @@ foreach (shader_file IN LISTS Master_TechDemo_shader_sources)
 endforeach()
 add_custom_target(Master_TechDemo_copy_shaders DEPENDS ${Master_TechDemo_shader_copies})
 add_dependencies(Master_TechDemo Master_TechDemo_copy_shaders)
-

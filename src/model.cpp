@@ -281,3 +281,14 @@ glm::mat4 RS_Model::evaluateMeshSpecificMatrix(size_t meshIndex, const glm::mat4
 
     return baseMatrix;
 }
+
+glm::mat4 RS_Model::getModelMatrix() const
+{
+    return evaluateModelMatrix();
+}
+
+glm::vec3 RS_Model::getWorldPosition() const
+{
+    const glm::mat4 modelMatrix = evaluateModelMatrix();
+    return glm::vec3(modelMatrix[3]);
+}

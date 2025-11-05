@@ -62,6 +62,8 @@ public:
     size_t getMeshCount() const { return m_meshes.size(); }
 	bool getAnimationEnabled() const { return m_animationEnabled; }
 	void enableAnimation(bool enable) { m_animationEnabled = enable; }
+    glm::mat4 getModelMatrix() const;
+    glm::vec3 getWorldPosition() const;
 
 private:
     std::vector<GPUMesh> m_meshes;

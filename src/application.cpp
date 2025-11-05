@@ -42,6 +42,8 @@ public:
         glm::ivec2 windowSize = m_window.getWindowSize();
         glViewport(0, 0, windowSize.x, windowSize.y);
 
+        m_lastFrameTime = glfwGetTime();
+
         try {
             ShaderBuilder defaultBuilder;
             defaultBuilder.addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl");
@@ -386,6 +388,34 @@ public:
             ImGui::PopID();
         }
 
+        ImGui::Separator();
+        ImGui::Text("Water Surface");
+        WaterSurface& water = activeScene.getWater();
+        bool waterEnabled = water.isEnabled();
+        if (ImGui::Checkbox("Enable Water", &waterEnabled)) {
+            water.setEnabled(waterEnabled);
+        }
+        float waterExtent = water.getTileSize();
+        if (ImGui::SliderFloat("Water Generation Range", &waterExtent, 20.0f, 250.0f)) {
+            water.setTileSize(waterExtent);
+        }
+        float waterAmplitude = water.getAmplitude();
+        if (ImGui::SliderFloat("Amplitude", &waterAmplitude, 0.01f, 0.5f)) {
+            water.setAmplitude(waterAmplitude);
+        }
+        float waterFrequency = water.getFrequency();
+        if (ImGui::SliderFloat("Frequency", &waterFrequency, 0.05f, 1.2f)) {
+            water.setFrequency(waterFrequency);
+        }
+        float waterSpeed = water.getSpeed();
+        if (ImGui::SliderFloat("Speed", &waterSpeed, 0.0f, 2.0f)) {
+            water.setSpeed(waterSpeed);
+        }
+        float waterHeight = water.getHeightOffset();
+        if (ImGui::SliderFloat("Height", &waterHeight, -5.0f, 2.0f)) {
+            water.setHeightOffset(waterHeight);
+        }
+
         ImGui::Checkbox("Debug", &m_debug);
 
         ImGui::End();
@@ -439,6 +469,10 @@ public:
             // Put your real-time logic and rendering in here
             m_window.updateInput();
 
+            double currentTime = glfwGetTime();
+            float deltaTime = static_cast<float>(currentTime - m_lastFrameTime);
+            m_lastFrameTime = currentTime;
+
             render_imgui();
 
             // Clear the screen
@@ -450,6 +484,9 @@ public:
             // Draw the active scene
             if (!m_scenes.empty()) {
                 RS_Scene& activeScene = m_scenes[m_activeSceneIndex];
+
+                const glm::vec3 focusPoint = activeScene.getProceduralFocusPoint();
+                activeScene.updateWaterSurface(focusPoint, deltaTime);
 
                 // Generate shadow maps before rendering the main passes
                 activeScene.renderShadowMaps(m_shadowShader, m_shadowCubemapShader, m_settings);
@@ -540,6 +577,7 @@ private:
     // Scene system
     std::vector<RS_Scene> m_scenes;
     size_t m_activeSceneIndex { 0 };
+    double m_lastFrameTime = 0.0;
 };
 
 int main()

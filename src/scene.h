@@ -4,6 +4,7 @@
 
 #ifndef COMPUTERGRAPHICS_RSSCENE_H
 #define COMPUTERGRAPHICS_RSSCENE_H
+#include <memory>
 #include <utility>
 #include <vector>
 #include <glm/vec2.hpp>
@@ -12,6 +13,7 @@
 #include "model.h"
 #include "texture.h"
 #include "cubemap.h"
+#include "water_surface.h"
 #include "framework/trackball.h"
 #include "framework/shader.h"
 
@@ -29,7 +31,7 @@ struct RS_RenderSettings
 class RS_Scene
 {
 public:
-    RS_Scene() = default;
+    RS_Scene();
 
     // Draw the entire scene
     void draw(const Shader& drawShader, RS_RenderSettings settings);
@@ -72,6 +74,12 @@ public:
     void addModel(RS_Model&& model) { m_models.push_back(std::move(model)); }
     size_t getModelCount() const { return m_models.size(); }
 
+    WaterSurface& getWater() { return *m_water; }
+    const WaterSurface& getWater() const { return *m_water; }
+
+    void updateWaterSurface(const glm::vec3& focusPosition, float deltaTime);
+    glm::vec3 getProceduralFocusPoint() const;
+
     // Environment map management
     RS_Cubemap* getEnvironmentCubemap() { return m_environmentCubemap.get(); }
     const RS_Cubemap* getEnvironmentCubemap() const { return m_environmentCubemap.get(); }
@@ -95,6 +103,9 @@ private:
 
     // Lights
     std::vector<RS_Light> m_lights;
+
+    // Procedural content
+    std::unique_ptr<WaterSurface> m_water;
 
     //Environment map
     std::unique_ptr<RS_Cubemap> m_environmentCubemap { nullptr };

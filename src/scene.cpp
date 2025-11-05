@@ -18,6 +18,10 @@ constexpr GLint SHADOW_MAP_TEXTURE_UNIT = 5;
 constexpr GLint SHADOW_CUBEMAP_TEXTURE_UNIT = 6;
 }
 
+RS_Scene::RS_Scene()
+    : m_water(std::make_unique<WaterSurface>())
+{
+}
 void RS_Scene::draw(const Shader& drawShader, RS_RenderSettings settings)
 {
     if (m_cameras.empty()) {
@@ -87,6 +91,9 @@ void RS_Scene::draw(const Shader& drawShader, RS_RenderSettings settings)
         for (RS_Model& model : m_models) {
             model.draw(drawShader, viewProjectionMatrix);
         }
+
+        if (m_water)
+            m_water->draw(drawShader, viewProjectionMatrix);
     }
 
     if (!m_lights.empty()) {
@@ -127,6 +134,9 @@ void RS_Scene::drawEnvironment(const Shader& envShader, RS_RenderSettings settin
     for (RS_Model& model : m_models) {
         model.draw(envShader, viewProjectionMatrix);
     }
+
+    if (m_water)
+        m_water->drawEnvironment(envShader, viewProjectionMatrix);
 }
 
 void RS_Scene::drawSkybox(const Shader& skyboxShader, GLuint skyboxVAO)
@@ -162,7 +172,7 @@ void RS_Scene::renderShadowMaps(const Shader& shadowShader,
     const Shader& shadowCubemapShader,
     const RS_RenderSettings& settings)
 {
-    if (!settings.enableShadows || m_lights.empty() || m_models.empty())
+    if (!settings.enableShadows || m_lights.empty())
         return;
 
     GLint previousViewport[4];
@@ -205,6 +215,9 @@ void RS_Scene::renderShadowMaps(const Shader& shadowShader,
             for (RS_Model& model : m_models) {
                 model.drawDepth(shadowShader, lightSpaceMatrix);
             }
+
+            if (m_water)
+                m_water->drawDepth(shadowShader, lightSpaceMatrix);
         } else if (light.m_type == RS_LIGHT_TYPE_POINT && light.m_cubeMapTexture) {
             const int resolution = light.m_cubeMapTexture->getResolution();
             glViewport(0, 0, resolution, resolution);
@@ -248,6 +261,9 @@ void RS_Scene::renderShadowMaps(const Shader& shadowShader,
             for (RS_Model& model : m_models) {
                 model.drawDepthCubemap(shadowCubemapShader);
             }
+
+            if (m_water)
+                m_water->drawDepthCubemap(shadowCubemapShader);
         }
     }
 
@@ -255,4 +271,23 @@ void RS_Scene::renderShadowMaps(const Shader& shadowShader,
     glCullFace(GL_BACK);
     glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
     glDepthMask(GL_TRUE);
+}
+
+void RS_Scene::updateWaterSurface(const glm::vec3& focusPosition, float deltaTime)
+{
+    if (m_water)
+        m_water->update(focusPosition, deltaTime);
+}
+
+glm::vec3 RS_Scene::getProceduralFocusPoint() const
+{
+    if (!m_models.empty()) {
+        return m_models.front().getWorldPosition();
+    }
+
+    if (!m_cameras.empty()) {
+        return m_cameras[m_activeCameraIndex]->position();
+    }
+
+    return glm::vec3(0.0f);
 }
